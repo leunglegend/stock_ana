@@ -25,6 +25,18 @@ class Settings:
         "http://127.0.0.1:5173",
     ]
 
+    # 数据库配置
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./stock_analyzer.db")
+
+    # JWT 配置
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
+    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    jwt_access_token_expire_hours: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_HOURS", "24"))
+
+    # 定时任务配置
+    scheduler_enabled: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
+    daily_report_cron: str = os.getenv("DAILY_REPORT_CRON", "30 15 * * 1-5")
+
     @property
     def ai_available(self) -> bool:
         """AI 服务是否可用"""
