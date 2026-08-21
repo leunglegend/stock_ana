@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      {
+        "type": "bash",
+        "command": "cd * && source venv/bin/activate && python -c *",
+        "reason": "快速验证 Python 代码和数据"
+      },
+      {
+        "type": "bash",
+        "command": "curl -s http://localhost:8000/*",
+        "reason": "测试本地 API 接口"
+      },
+      {
+        "type": "bash",
+        "command": "ls *",
+        "reason": "查看目录结构"
+      }
+    ]
+  },
+  "experimental": {
+    "quickEdit": true
+  }
+}

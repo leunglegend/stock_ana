@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://localhost:8000/api/board/concept\")",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}
