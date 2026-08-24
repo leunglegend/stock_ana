@@ -40,4 +40,18 @@ router.beforeEach((to, from, next) => {
   next()
 })
 
+// 自选股页面需要登录（未登录弹出登录框，停留在当前页面）
+router.beforeEach(async (to, from, next) => {
+  if (to.path === '/watchlist') {
+    const mod = await import('../store/user')
+    const userStore = mod.useUserStore()
+    if (!userStore.isLoggedIn) {
+      window.dispatchEvent(new CustomEvent('show-login'))
+      next(false)
+      return
+    }
+  }
+  next()
+})
+
 export default router

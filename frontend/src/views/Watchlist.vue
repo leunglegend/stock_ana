@@ -310,9 +310,9 @@ function isWatched(code) {
   return store.isWatched(code)
 }
 
-function confirmAdd() {
+async function confirmAdd() {
   if (!selectedStock.value) return
-  const success = store.addStock({
+  const success = await store.addStock({
     code: selectedStock.value.code,
     name: selectedStock.value.name,
     cost: costPrice.value || 0,
@@ -327,8 +327,8 @@ function confirmAdd() {
   }
 }
 
-function toggleWatch(row) {
-  store.removeStock(row.code)
+async function toggleWatch(row) {
+  await store.removeStock(row.code)
   loadStockPrices()
   ElMessage.success('已移除自选')
 }
@@ -336,8 +336,8 @@ function toggleWatch(row) {
 function removeStock(row) {
   ElMessageBox.confirm(`确定要移除「${row.name}」吗？`, '提示', {
     type: 'warning',
-  }).then(() => {
-    store.removeStock(row.code)
+  }).then(async () => {
+    await store.removeStock(row.code)
     loadStockPrices()
     ElMessage.success('移除成功')
   }).catch(() => {})
@@ -349,9 +349,9 @@ function editCost(row) {
   showCostDialog.value = true
 }
 
-function confirmCost() {
+async function confirmCost() {
   if (!currentStock.value) return
-  store.updateCost(currentStock.value.code, costPrice.value)
+  await store.updateCost(currentStock.value.code, costPrice.value)
   loadStockPrices()
   showCostDialog.value = false
   ElMessage.success('成本价已更新')
@@ -370,17 +370,21 @@ function handleGroupCommand(cmd) {
     ElMessageBox.prompt('请输入分组名称', '新建分组', {
       inputPattern: /\S+/,
       inputErrorMessage: '分组名称不能为空',
-    }).then(({ value }) => {
-      store.addGroup(value)
-      ElMessage.success('创建成功')
+    }).then(async ({ value }) => {
+      const id = await store.addGroup(value)
+      if (id) {
+        ElMessage.success('创建成功')
+      }
     }).catch(() => {})
   } else if (cmd === 'delete-group') {
     ElMessageBox.confirm(`确定删除「${activeGroupName.value}」分组吗？`, '提示', {
       type: 'warning',
-    }).then(() => {
-      store.removeGroup(activeGroup.value)
-      loadStockPrices()
-      ElMessage.success('删除成功')
+    }).then(async () => {
+      const ok = await store.removeGroup(activeGroup.value)
+      if (ok) {
+        loadStockPrices()
+        ElMessage.success('删除成功')
+      }
     }).catch(() => {})
   } else if (cmd === 'rename-group') {
     // 预留

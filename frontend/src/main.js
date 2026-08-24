@@ -22,7 +22,7 @@ import {
 } from 'echarts/components'
 
 import router from './router'
-import { pinia } from './store'
+import { pinia, useWatchlistStore } from './store'
 import './style.css'
 import App from './App.vue'
 
@@ -51,5 +51,9 @@ app.component('v-chart', ECharts)
 app.use(ElementPlus, { locale: zhCn })
 app.use(router)
 app.use(pinia)
+
+// 初始化自选股 store（监听登录状态，自动切换云端/本地模式）
+const watchlistStore = useWatchlistStore()
+watchlistStore.init()
 
 app.mount('#app')
