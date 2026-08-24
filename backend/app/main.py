@@ -1,10 +1,14 @@
 """
 FastAPI 主入口
 """
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.database import Base, engine
 from app.models import User, WatchlistGroup, WatchlistItem, DailyReport, StockReport, Notification  # noqa: F401  确保模型被导入以建表
 from app.routes.stock import router as stock_router
@@ -49,7 +53,7 @@ async def preload_data():
         from app.services.scheduler import start_scheduler
         start_scheduler()
     except Exception as e:
-        print(f"启动定时任务调度器失败: {e}")
+        logger.error("启动定时任务调度器失败: %s", e)
 
     """启动时预加载所有缓存数据（后台异步，不阻塞启动）"""
     import asyncio
@@ -74,13 +78,13 @@ async def preload_data():
 
 
 @app.on_event("shutdown")
-async def shutdown():
+async def shutdown_event():
     """关闭时停止定时任务调度器。"""
     try:
         from app.services.scheduler import shutdown_scheduler
         shutdown_scheduler()
     except Exception as e:
-        print(f"关闭定时任务调度器失败: {e}")
+        logger.error("关闭定时任务调度器失败: %s", e)
 
 
 @app.get("/", summary="健康检查")

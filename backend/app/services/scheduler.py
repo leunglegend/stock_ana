@@ -5,10 +5,9 @@
 主要任务：盘后复盘（交易日 15:30）
 """
 
-import asyncio
 import logging
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -26,48 +25,52 @@ def run_daily_report_job():
     """
     盘后复盘定时任务。
     遍历所有有自选股的用户，为每个用户生成当日复盘报告。
+    每个用户使用独立的 DB session，避免单个 session 生命周期过长。
     """
     logger.info("开始执行盘后复盘定时任务")
     today = date.today()
 
+    # 先用一个短生命周期的 session 获取用户列表
+    user_ids: List[int] = []
     db = SessionLocal()
     try:
         user_ids = report_service.get_all_users_with_watchlist(db)
         logger.info("找到 %s 个有自选股的用户", len(user_ids))
-
-        for user_id in user_ids:
-            try:
-                # 检查是否已生成
-                existing = report_service.get_report_by_date(db, user_id, today)
-                if existing and existing.status == "completed":
-                    logger.info("用户 %s 今日报告已存在，跳过", user_id)
-                    continue
-
-                # 生成报告（同步调用 async 函数）
-                report = asyncio.run(
-                    report_service.generate_daily_report_for_user(db, user_id, today)
-                )
-
-                if report and report.status == "completed":
-                    # 发送通知
-                    notification_service.create_notification(
-                        db,
-                        user_id=user_id,
-                        title=f"{today} 盘后复盘已生成",
-                        content=f"覆盖 {report.stock_count} 只自选股，点击查看详情",
-                        type="report",
-                        ref_id=report.id,
-                    )
-                    logger.info("用户 %s 复盘报告生成完成，%s 只股票", user_id, report.stock_count)
-                else:
-                    logger.warning("用户 %s 复盘报告生成失败", user_id)
-
-            except Exception as e:
-                logger.error("生成用户 %s 复盘报告异常: %s", user_id, e, exc_info=True)
-                continue
-
     finally:
         db.close()
+
+    # 每个用户独立 session
+    for user_id in user_ids:
+        user_db = SessionLocal()
+        try:
+            # 检查是否已生成
+            existing = report_service.get_report_by_date(user_db, user_id, today)
+            if existing and existing.status == "completed":
+                logger.info("用户 %s 今日报告已存在，跳过", user_id)
+                continue
+
+            # 生成报告（同步函数，直接调用）
+            report = report_service.generate_daily_report_for_user(user_db, user_id, today)
+
+            if report and report.status == "completed":
+                # 发送通知
+                notification_service.create_notification(
+                    user_db,
+                    user_id=user_id,
+                    title=f"{today} 盘后复盘已生成",
+                    content=f"覆盖 {report.stock_count} 只自选股，点击查看详情",
+                    notification_type="report",
+                    ref_id=report.id,
+                )
+                logger.info("用户 %s 复盘报告生成完成，%s 只股票", user_id, report.stock_count)
+            else:
+                logger.warning("用户 %s 复盘报告生成失败", user_id)
+
+        except Exception as e:
+            logger.error("生成用户 %s 复盘报告异常: %s", user_id, e, exc_info=True)
+            continue
+        finally:
+            user_db.close()
 
     logger.info("盘后复盘定时任务执行完毕")
 

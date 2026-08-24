@@ -117,13 +117,26 @@ def _build_user_prompt(
 
 
 def _get_client():
-    """获取 Anthropic 客户端（通过火山引擎 Coding Plan）"""
+    """获取异步 Anthropic 客户端（通过火山引擎 Coding Plan）"""
     from anthropic import AsyncAnthropic
 
     base_url = settings.ARK_BASE_URL
     api_key = settings.ARK_API_KEY
 
     return AsyncAnthropic(
+        base_url=base_url,
+        api_key=api_key,
+    )
+
+
+def _get_sync_client():
+    """获取同步 Anthropic 客户端（通过火山引擎 Coding Plan）"""
+    from anthropic import Anthropic
+
+    base_url = settings.ARK_BASE_URL
+    api_key = settings.ARK_API_KEY
+
+    return Anthropic(
         base_url=base_url,
         api_key=api_key,
     )
@@ -378,14 +391,33 @@ def _build_stock_daily_prompt(
     return prompt
 
 
-async def generate_stock_daily_analysis(
+def _extract_json(text: str) -> Optional[dict]:
+    """从 AI 返回文本中提取 JSON 对象。
+
+    通过查找最外层的 { 和 } 来定位 JSON 内容，
+    兼容 markdown 代码块、前后多余文本等情况。
+    """
+    if not text:
+        return None
+    start = text.find('{')
+    end = text.rfind('}')
+    if start == -1 or end == -1 or end <= start:
+        return None
+    json_str = text[start:end + 1]
+    try:
+        return json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def generate_stock_daily_analysis(
     stock_code: str,
     stock_name: str,
     quote: StockInfo,
     kline: Optional[KLineData],
 ) -> Tuple[str, str]:
     """
-    盘后个股分析。
+    盘后个股分析（同步版本）。
 
     返回: (analysis_text, summary)
       - analysis_text：300-500 字 Markdown 分析
@@ -396,10 +428,10 @@ async def generate_stock_daily_analysis(
         return default_text, "AI 服务暂不可用"
 
     try:
-        client = _get_client()
+        client = _get_sync_client()
         user_prompt = _build_stock_daily_prompt(stock_code, stock_name, quote, kline)
 
-        message = await client.messages.create(
+        message = client.messages.create(
             model=settings.ARK_MODEL,
             max_tokens=1200,
             temperature=0.7,
@@ -412,25 +444,15 @@ async def generate_stock_daily_analysis(
         text = message.content[0].text
 
         # 尝试解析 JSON
-        try:
-            # 清理可能的 markdown 代码块标记
-            cleaned = text.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
-
-            data = json.loads(cleaned)
+        data = _extract_json(text)
+        if data:
             analysis_text = data.get("analysis_text", text)
             summary = data.get("summary", "")
             return analysis_text, summary
-        except (json.JSONDecodeError, ValueError):
-            # 解析失败，把全文作为 analysis_text，取首句作为 summary
-            summary = text.split("\n")[0][:50] if text else ""
-            return text, summary
+
+        # 解析失败，把全文作为 analysis_text，取首句作为 summary
+        summary = text.split("\n")[0][:50] if text else ""
+        return text, summary
 
     except Exception as e:
         logger_text = f"AI 盘后分析出错：{str(e)}"
@@ -511,12 +533,12 @@ def _build_daily_report_overview_prompt(
     return prompt
 
 
-async def generate_daily_report_overview(
+def generate_daily_report_overview(
     stock_results: List[dict],
     market_data,
 ) -> Tuple[str, List[dict], str]:
     """
-    生成盘后复盘整体分析。
+    生成盘后复盘整体分析（同步版本）。
 
     返回: (market_summary, highlights, risk_notes)
       - market_summary：200-300 字市场总评
@@ -530,10 +552,10 @@ async def generate_daily_report_overview(
         return default_summary, default_highlights, default_risk
 
     try:
-        client = _get_client()
+        client = _get_sync_client()
         user_prompt = _build_daily_report_overview_prompt(stock_results, market_data)
 
-        message = await client.messages.create(
+        message = client.messages.create(
             model=settings.ARK_MODEL,
             max_tokens=1500,
             temperature=0.7,
@@ -546,18 +568,8 @@ async def generate_daily_report_overview(
         text = message.content[0].text
 
         # 尝试解析 JSON
-        try:
-            # 清理可能的 markdown 代码块标记
-            cleaned = text.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
-
-            data = json.loads(cleaned)
+        data = _extract_json(text)
+        if data:
             market_summary = data.get("market_summary", "")
             highlights = data.get("highlights", [])
             risk_notes = data.get("risk_notes", "")
@@ -571,9 +583,9 @@ async def generate_daily_report_overview(
                         "reason": h.get("reason", ""),
                     })
             return market_summary, valid_highlights, risk_notes
-        except (json.JSONDecodeError, ValueError):
-            # 解析失败，返回默认结构
-            return text, [], "市场有风险，投资需谨慎。"
+
+        # 解析失败，返回默认结构
+        return text, [], "市场有风险，投资需谨慎。"
 
     except Exception as e:
         logger_text = f"AI 日报总览出错：{str(e)}"

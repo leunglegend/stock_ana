@@ -16,7 +16,7 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(100), nullable=False)
     content = Column(String(500), default="")
-    type = Column(String(20), default="system")  # report / system
+    notification_type = Column(String(20), default="system")  # report / system
     ref_id = Column(Integer, nullable=True)  # 关联 ID，如 report_id
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

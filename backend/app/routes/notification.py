@@ -50,12 +50,9 @@ def mark_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    success = notification_service.mark_as_read(db, current_user.id, notif_id)
-    if not success:
+    notif = notification_service.mark_as_read(db, current_user.id, notif_id)
+    if not notif:
         raise HTTPException(status_code=404, detail="通知不存在")
-    # 返回更新后的对象
-    from app.models.notification import Notification
-    notif = db.query(Notification).filter(Notification.id == notif_id).first()
     return notif
 
 

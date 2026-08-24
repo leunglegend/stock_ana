@@ -14,7 +14,7 @@ def create_notification(
     user_id: int,
     title: str,
     content: str = "",
-    type: str = "system",
+    notification_type: str = "system",
     ref_id: Optional[int] = None,
 ) -> Notification:
     """创建一条通知。"""
@@ -22,7 +22,7 @@ def create_notification(
         user_id=user_id,
         title=title,
         content=content,
-        type=type,
+        notification_type=notification_type,
         ref_id=ref_id,
     )
     db.add(notif)
@@ -61,17 +61,18 @@ def get_unread_count(db: Session, user_id: int) -> int:
     )
 
 
-def mark_as_read(db: Session, user_id: int, notif_id: int) -> bool:
-    """标记单条通知为已读。"""
+def mark_as_read(db: Session, user_id: int, notif_id: int) -> Optional[Notification]:
+    """标记单条通知为已读，返回更新后的通知对象；不存在返回 None。"""
     notif = db.query(Notification).filter(
         Notification.id == notif_id,
         Notification.user_id == user_id,
     ).first()
     if not notif:
-        return False
+        return None
     notif.is_read = True
     db.commit()
-    return True
+    db.refresh(notif)
+    return notif
 
 
 def mark_all_as_read(db: Session, user_id: int) -> int:

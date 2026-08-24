@@ -3,7 +3,6 @@
 所有接口需登录。
 """
 
-import asyncio
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -55,9 +54,7 @@ def _run_generate_task(user_id: int, report_date: date):
     """在后台线程中运行报告生成任务。"""
     db = SessionLocal()
     try:
-        report = asyncio.run(
-            report_service.generate_daily_report_for_user(db, user_id, report_date)
-        )
+        report = report_service.generate_daily_report_for_user(db, user_id, report_date)
         if report and report.status == "completed":
             # 生成通知
             notification_service.create_notification(
@@ -65,7 +62,7 @@ def _run_generate_task(user_id: int, report_date: date):
                 user_id=user_id,
                 title=f"{report_date} 盘后复盘已生成",
                 content=f"覆盖 {report.stock_count} 只自选股，点击查看详情",
-                type="report",
+                notification_type="report",
                 ref_id=report.id,
             )
     finally:
@@ -84,10 +81,13 @@ def generate_today(
     existing = report_service.get_report_by_date(db, current_user.id, today)
     if existing and existing.status == "completed":
         return {"success": True, "report_id": existing.id, "message": "今日报告已存在"}
+    if existing and existing.status == "generating":
+        return {"success": True, "report_id": existing.id, "message": "正在生成中..."}
 
-    # 后台任务
+    # 先创建 pending 记录（确保在后台任务启动前已存在）
+    report = report_service.create_pending_report(db, current_user.id, today)
+
+    # 再添加后台任务
     background_tasks.add_task(_run_generate_task, current_user.id, today)
 
-    # 先创建 pending 记录
-    report = report_service.create_pending_report(db, current_user.id, today)
     return {"success": True, "report_id": report.id, "message": "正在生成中..."}

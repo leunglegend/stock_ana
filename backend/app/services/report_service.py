@@ -2,7 +2,6 @@
 盘后复盘报告服务：生成 + 查询。
 """
 
-import json
 import logging
 from datetime import date, datetime
 from typing import List, Optional, Tuple
@@ -154,16 +153,16 @@ def save_report_summary(
         db.commit()
 
 
-async def generate_daily_report_for_user(
+def generate_daily_report_for_user(
     db: Session, user_id: int, report_date: date
 ) -> Optional[DailyReport]:
     """
-    为指定用户生成一天的复盘报告。
+    为指定用户生成一天的复盘报告（同步版本）。
     这是核心生成函数，返回生成好的报告，失败返回 None。
 
     流程：
     1. 获取用户自选股
-    2. 创建 pending report
+    2. 创建或复用 pending/generating report
     3. 获取市场概览数据
     4. 逐只股票获取行情 + K 线 + AI 分析
     5. 生成整体市场点评 + 关注重点
@@ -179,13 +178,25 @@ async def generate_daily_report_for_user(
         logger.info("用户 %s 没有自选股，跳过复盘生成", user_id)
         return None
 
-    # 2. 创建 pending report
-    report = create_pending_report(db, user_id, report_date)
-    report.status = "generating"
-    db.commit()
+    # 2. 获取或创建报告
+    existing = get_report_by_date(db, user_id, report_date)
+    if existing and existing.status in ("pending", "generating"):
+        # 已有 pending/generating 报告，直接复用（避免竞态重置）
+        report = existing
+        report.status = "generating"
+        report.error_msg = ""
+        db.commit()
+    elif existing and existing.status == "completed":
+        # 已完成，不再重新生成
+        return existing
+    else:
+        # 不存在或失败，创建新的
+        report = create_pending_report(db, user_id, report_date)
+        report.status = "generating"
+        db.commit()
 
     try:
-        # 3. 获取市场概览（同步函数，直接调用）
+        # 3. 获取市场概览
         try:
             market_data = get_market_summary()
         except Exception as e:
@@ -196,7 +207,7 @@ async def generate_daily_report_for_user(
         stock_results = []
         for stock_code, stock_name in stocks:
             try:
-                # 获取行情（同步函数）
+                # 获取行情
                 quote = get_stock_info(stock_code)
                 if quote is None:
                     logger.warning("获取股票 %s 行情失败，跳过", stock_code)
@@ -204,14 +215,14 @@ async def generate_daily_report_for_user(
                 change_pct = float(getattr(quote, "change_pct", 0) or 0.0)
                 close_price = float(getattr(quote, "price", 0) or 0.0)
 
-                # 获取近 30 日 K 线（同步函数）
+                # 获取近 30 日 K 线
                 try:
                     kline = get_kline_data(stock_code, period="daily", days=30)
                 except Exception:
                     kline = None
 
-                # AI 分析（异步函数）
-                analysis_text, summary = await generate_stock_daily_analysis(
+                # AI 分析（同步调用）
+                analysis_text, summary = generate_stock_daily_analysis(
                     stock_code, stock_name, quote, kline
                 )
 
@@ -237,7 +248,7 @@ async def generate_daily_report_for_user(
 
         # 5. 生成整体复盘
         try:
-            market_summary_text, highlights, risk_notes = await generate_daily_report_overview(
+            market_summary_text, highlights, risk_notes = generate_daily_report_overview(
                 stock_results, market_data
             )
             save_report_summary(db, report.id, market_summary_text, highlights, risk_notes)
