@@ -1,8 +1,9 @@
 """
 AI 分析服务 - 基于火山引擎 Coding Plan (Claude API 兼容)
 """
+import json
 import os
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, List, Tuple
 
 from app.config import settings
 from app.models.schemas import StockInfo, KLineData, FinancialData
@@ -305,3 +306,276 @@ async def analyze_market_stream(summary_data, boards_data) -> AsyncGenerator[str
     except Exception as e:
         yield f"\n\n❌ AI 点评出错：{str(e)}"
         print(f"AI 市场点评错误: {e}")
+
+
+# ===== 盘后复盘 AI 分析 =====
+
+STOCK_DAILY_ANALYSIS_SYSTEM_PROMPT = """你是一位专业的盘后股票分析师，擅长对当日个股表现做精准复盘。
+
+要求：
+1. 聚焦当日表现，结合近期走势给出技术面判断
+2. 明确指出关键支撑位和压力位
+3. 给出明确的短期观察点和操作建议
+4. 必须包含风险提示
+5. 语言精炼专业，适合盘后快速阅读
+6. 使用中文回答
+7. analysis_text 控制在 300-500 字左右，使用 Markdown 格式
+8. summary 为一句话摘要，50 字以内
+
+输出必须是严格的 JSON 格式，包含两个字段：
+{
+    "analysis_text": "详细分析内容...",
+    "summary": "一句话摘要"
+}
+
+⚠️ 重要提示：你的分析仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。
+"""
+
+
+def _build_stock_daily_prompt(
+    stock_code: str,
+    stock_name: str,
+    quote: StockInfo,
+    kline: Optional[KLineData],
+) -> str:
+    """构建盘后个股分析 prompt。"""
+    # 当日行情
+    quote_lines = [
+        f"股票代码：{stock_code}",
+        f"股票名称：{stock_name}",
+        f"收盘价：{quote.price} 元",
+        f"涨跌幅：{quote.change_pct}%",
+        f"涨跌额：{quote.change_amount} 元",
+        f"今开：{quote.open} 元",
+        f"昨收：{quote.pre_close} 元",
+        f"最高：{quote.high} 元",
+        f"最低：{quote.low} 元",
+        f"成交量：{quote.volume} 手",
+        f"成交额：{quote.amount} 元",
+    ]
+
+    # K 线数据
+    kline_str = "暂无K线数据"
+    if kline and kline.kline:
+        recent = []
+        for item in kline.kline[-30:]:
+            recent.append(
+                f"{item.date}: 开{item.open} 高{item.high} 低{item.low} 收{item.close} 量{item.volume}"
+            )
+        kline_str = "\n".join(recent)
+
+    prompt = f"""
+请对以下股票进行盘后分析：
+
+【当日行情】
+{chr(10).join(quote_lines)}
+
+【近30个交易日K线】
+{kline_str}
+
+请按要求进行盘后复盘分析，并以 JSON 格式返回结果。
+"""
+    return prompt
+
+
+async def generate_stock_daily_analysis(
+    stock_code: str,
+    stock_name: str,
+    quote: StockInfo,
+    kline: Optional[KLineData],
+) -> Tuple[str, str]:
+    """
+    盘后个股分析。
+
+    返回: (analysis_text, summary)
+      - analysis_text：300-500 字 Markdown 分析
+      - summary：一句话摘要（50 字以内）
+    """
+    if not settings.ai_available:
+        default_text = "⚠️ AI 分析服务暂不可用：未配置 API Key 和模型。"
+        return default_text, "AI 服务暂不可用"
+
+    try:
+        client = _get_client()
+        user_prompt = _build_stock_daily_prompt(stock_code, stock_name, quote, kline)
+
+        message = await client.messages.create(
+            model=settings.ARK_MODEL,
+            max_tokens=1200,
+            temperature=0.7,
+            system=STOCK_DAILY_ANALYSIS_SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+
+        text = message.content[0].text
+
+        # 尝试解析 JSON
+        try:
+            # 清理可能的 markdown 代码块标记
+            cleaned = text.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+            data = json.loads(cleaned)
+            analysis_text = data.get("analysis_text", text)
+            summary = data.get("summary", "")
+            return analysis_text, summary
+        except (json.JSONDecodeError, ValueError):
+            # 解析失败，把全文作为 analysis_text，取首句作为 summary
+            summary = text.split("\n")[0][:50] if text else ""
+            return text, summary
+
+    except Exception as e:
+        logger_text = f"AI 盘后分析出错：{str(e)}"
+        print(logger_text)
+        return logger_text, "分析出错"
+
+
+DAILY_REPORT_OVERVIEW_SYSTEM_PROMPT = """你是一位资深的投资顾问，擅长从用户自选股中提炼每日复盘重点。
+
+要求：
+1. 结合市场整体表现和个股情况，给出 200-300 字的市场总评
+2. 从自选股中挑选 3-5 只最值得关注的股票作为关注重点
+3. 给出 100-200 字的整体风险提示，客观理性
+4. 语言专业但通俗易懂，适合普通投资者
+5. 使用中文回答
+
+输出必须是严格的 JSON 格式，包含三个字段：
+{
+    "market_summary": "200-300字市场总评...",
+    "highlights": [
+        {"stock_code": "600519", "stock_name": "贵州茅台", "reason": "关注理由..."},
+        ...
+    ],
+    "risk_notes": "100-200字整体风险提示..."
+}
+
+⚠️ 重要提示：你的分析仅供参考，不构成任何投资建议。投资有风险，入市需谨慎。
+"""
+
+
+def _build_daily_report_overview_prompt(
+    stock_results: List[dict],
+    market_data,
+) -> str:
+    """构建日报总览 prompt。"""
+    # 市场数据
+    market_lines = []
+    if market_data:
+        def fmt_idx(name, val, pct):
+            if val is None:
+                return f"- {name}：暂无数据"
+            sign = '+' if pct and pct > 0 else ''
+            return f"- {name}：{val:.2f}点 {sign}{pct:.2f}%"
+
+        market_lines = [
+            fmt_idx('上证指数', market_data.sh_index, market_data.sh_change_pct),
+            fmt_idx('深证成指', market_data.sz_index, market_data.sz_change_pct),
+            fmt_idx('创业板指', market_data.cyb_index, market_data.cyb_change_pct),
+            f"- 上涨家数：{market_data.rise_count} 家",
+            f"- 下跌家数：{market_data.fall_count} 家",
+            f"- 涨停：{getattr(market_data, 'limit_up_count', 0)} 家",
+            f"- 跌停：{getattr(market_data, 'limit_down_count', 0)} 家",
+            f"- 两市成交额：{market_data.total_amount:.0f} 亿元",
+        ]
+    else:
+        market_lines = ["- 暂无市场数据"]
+
+    # 个股列表
+    stock_lines = []
+    for s in stock_results:
+        sign = '+' if s['change_pct'] > 0 else ''
+        stock_lines.append(
+            f"- {s['stock_name']}({s['stock_code']}) {sign}{s['change_pct']:.2f}% — {s['summary']}"
+        )
+
+    prompt = f"""
+请根据以下数据，为用户生成盘后复盘总览：
+
+【市场概览】
+{chr(10).join(market_lines)}
+
+【自选股表现】
+{chr(10).join(stock_lines)}
+
+请从以上自选股中挑选 3-5 只最值得关注的股票，并生成市场总评和风险提示。
+以 JSON 格式返回结果。
+"""
+    return prompt
+
+
+async def generate_daily_report_overview(
+    stock_results: List[dict],
+    market_data,
+) -> Tuple[str, List[dict], str]:
+    """
+    生成盘后复盘整体分析。
+
+    返回: (market_summary, highlights, risk_notes)
+      - market_summary：200-300 字市场总评
+      - highlights：3-5 只重点关注股票 [{stock_code, stock_name, reason}]
+      - risk_notes：100-200 字整体风险提示
+    """
+    if not settings.ai_available:
+        default_summary = "⚠️ AI 服务暂不可用，无法生成市场总评。"
+        default_highlights = []
+        default_risk = "市场有风险，投资需谨慎。"
+        return default_summary, default_highlights, default_risk
+
+    try:
+        client = _get_client()
+        user_prompt = _build_daily_report_overview_prompt(stock_results, market_data)
+
+        message = await client.messages.create(
+            model=settings.ARK_MODEL,
+            max_tokens=1500,
+            temperature=0.7,
+            system=DAILY_REPORT_OVERVIEW_SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+
+        text = message.content[0].text
+
+        # 尝试解析 JSON
+        try:
+            # 清理可能的 markdown 代码块标记
+            cleaned = text.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+            data = json.loads(cleaned)
+            market_summary = data.get("market_summary", "")
+            highlights = data.get("highlights", [])
+            risk_notes = data.get("risk_notes", "")
+            # 确保 highlights 格式正确
+            valid_highlights = []
+            for h in highlights:
+                if isinstance(h, dict) and "stock_code" in h and "stock_name" in h:
+                    valid_highlights.append({
+                        "stock_code": h["stock_code"],
+                        "stock_name": h["stock_name"],
+                        "reason": h.get("reason", ""),
+                    })
+            return market_summary, valid_highlights, risk_notes
+        except (json.JSONDecodeError, ValueError):
+            # 解析失败，返回默认结构
+            return text, [], "市场有风险，投资需谨慎。"
+
+    except Exception as e:
+        logger_text = f"AI 日报总览出错：{str(e)}"
+        print(logger_text)
+        return logger_text, [], "市场有风险，投资需谨慎。"

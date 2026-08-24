@@ -6,11 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.models import User, WatchlistGroup, WatchlistItem  # noqa: F401  确保模型被导入以建表
+from app.models import User, WatchlistGroup, WatchlistItem, DailyReport, StockReport, Notification  # noqa: F401  确保模型被导入以建表
 from app.routes.stock import router as stock_router
 from app.routes.board import router as board_router
 from app.routes.auth import router as auth_router
 from app.routes.watchlist import router as watchlist_router
+from app.routes.notification import router as notification_router
+from app.routes.report import router as report_router
 
 app = FastAPI(
     title="股票分析 API",
@@ -32,6 +34,8 @@ app.include_router(stock_router)
 app.include_router(board_router)
 app.include_router(auth_router)
 app.include_router(watchlist_router)
+app.include_router(notification_router)
+app.include_router(report_router)
 
 
 @app.on_event("startup")
@@ -39,6 +43,13 @@ async def preload_data():
     """启动时建表并预加载所有缓存数据（后台异步，不阻塞启动）"""
     # 创建所有数据表
     Base.metadata.create_all(bind=engine)
+
+    # 启动定时任务调度器
+    try:
+        from app.services.scheduler import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        print(f"启动定时任务调度器失败: {e}")
 
     """启动时预加载所有缓存数据（后台异步，不阻塞启动）"""
     import asyncio
@@ -60,6 +71,16 @@ async def preload_data():
 
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _load)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """关闭时停止定时任务调度器。"""
+    try:
+        from app.services.scheduler import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception as e:
+        print(f"关闭定时任务调度器失败: {e}")
 
 
 @app.get("/", summary="健康检查")
