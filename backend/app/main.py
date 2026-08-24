@@ -5,8 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.database import Base, engine
+from app.models import User  # noqa: F401  确保模型被导入以建表
 from app.routes.stock import router as stock_router
 from app.routes.board import router as board_router
+from app.routes.auth import router as auth_router
 
 app = FastAPI(
     title="股票分析 API",
@@ -26,10 +29,15 @@ app.add_middleware(
 # 注册路由
 app.include_router(stock_router)
 app.include_router(board_router)
+app.include_router(auth_router)
 
 
 @app.on_event("startup")
 async def preload_data():
+    """启动时建表并预加载所有缓存数据（后台异步，不阻塞启动）"""
+    # 创建所有数据表
+    Base.metadata.create_all(bind=engine)
+
     """启动时预加载所有缓存数据（后台异步，不阻塞启动）"""
     import asyncio
 
