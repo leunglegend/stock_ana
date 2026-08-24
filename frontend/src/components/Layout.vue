@@ -23,13 +23,33 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-info">
-          <el-avatar :size="32" icon="User" />
-          <div class="user-detail">
-            <div class="user-name">投资者</div>
-            <div class="user-desc">VIP 会员</div>
-          </div>
+        <!-- 未登录：显示登录按钮 -->
+        <div v-if="!userStore.isLoggedIn" class="user-login">
+          <el-button type="primary" plain style="width: 100%" @click="openLogin">
+            <el-icon><User /></el-icon>
+            <span class="nav-text">点击登录</span>
+          </el-button>
         </div>
+
+        <!-- 已登录：显示用户信息 + 下拉菜单 -->
+        <el-dropdown v-else trigger="click" @command="handleCommand">
+          <div class="user-info">
+            <el-avatar :size="32" icon="User" />
+            <div class="user-detail">
+              <div class="user-name">{{ userStore.username }}</div>
+              <div class="user-desc">已登录</div>
+            </div>
+            <el-icon><ArrowDown /></el-icon>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="logout">
+                <el-icon><SwitchButton /></el-icon>
+                退出登录
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </aside>
 
@@ -47,17 +67,40 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, RouterLink, RouterView } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  TrendCharts, Odometer, Star, DataAnalysis, User,
+  TrendCharts, Odometer, Star, DataAnalysis, User, ArrowDown, SwitchButton,
 } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/user'
 
 const route = useRoute()
+const userStore = useUserStore()
 
 const menuItems = computed(() => [
   { path: '/', title: '市场概览', icon: 'Odometer' },
   { path: '/watchlist', title: '自选股', icon: 'Star' },
   { path: '/board', title: '板块监控', icon: 'DataAnalysis' },
 ])
+
+function openLogin() {
+  window.dispatchEvent(new CustomEvent('show-login'))
+}
+
+async function handleCommand(command) {
+  if (command === 'logout') {
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+        confirmButtonText: '退出',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      userStore.logout()
+      ElMessage.success('已退出登录')
+    } catch (e) {
+      // 用户取消
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -136,10 +179,29 @@ const menuItems = computed(() => [
   border-top: 1px solid #f0f2f5;
 }
 
+.user-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-login .el-button {
+  justify-content: center;
+  gap: 8px;
+}
+
 .user-info {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.user-info:hover {
+  background: #f5f7fa;
 }
 
 .user-detail {
