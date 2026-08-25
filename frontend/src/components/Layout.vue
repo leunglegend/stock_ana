@@ -13,7 +13,7 @@
           :key="item.path"
           :to="item.path"
           class="nav-item"
-          :class="{ active: route.path === item.path }"
+          :class="{ active: isActive(item.path) }"
         >
           <el-icon :size="20">
             <component :is="item.icon" />
@@ -55,6 +55,13 @@
 
     <!-- 主内容区 -->
     <main class="main">
+      <!-- 顶部栏 -->
+      <div class="top-bar">
+        <div class="top-bar-right">
+          <NotificationBell />
+        </div>
+      </div>
+
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />
@@ -69,9 +76,10 @@ import { computed } from 'vue'
 import { useRoute, RouterLink, RouterView } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  TrendCharts, Odometer, Star, DataAnalysis, User, ArrowDown, SwitchButton,
+  TrendCharts, Odometer, Star, DataAnalysis, Document, User, ArrowDown, SwitchButton,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import NotificationBell from './NotificationBell.vue'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -80,7 +88,15 @@ const menuItems = computed(() => [
   { path: '/', title: '市场概览', icon: 'Odometer' },
   { path: '/watchlist', title: '自选股', icon: 'Star' },
   { path: '/board', title: '板块监控', icon: 'DataAnalysis' },
+  { path: '/reports', title: '复盘报告', icon: 'Document' },
 ])
+
+function isActive(path) {
+  if (path === '/reports') {
+    return route.path === '/reports' || route.path.startsWith('/reports/')
+  }
+  return route.path === path
+}
 
 function openLogin() {
   window.dispatchEvent(new CustomEvent('show-login'))
@@ -230,6 +246,21 @@ async function handleCommand(command) {
   margin-left: 220px;
   padding: 24px 28px;
   min-height: 100vh;
+}
+
+/* 顶部栏 */
+.top-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* 页面过渡 */

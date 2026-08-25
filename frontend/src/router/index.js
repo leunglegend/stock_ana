@@ -28,6 +28,18 @@ const routes = [
     component: () => import('../views/StockDetail.vue'),
     meta: { title: '股票详情', hidden: true },
   },
+  {
+    path: '/reports',
+    name: 'Reports',
+    component: () => import('../views/Reports.vue'),
+    meta: { title: '复盘报告', icon: 'Document', requiresAuth: true },
+  },
+  {
+    path: '/reports/:id',
+    name: 'ReportDetail',
+    component: () => import('../views/ReportDetail.vue'),
+    meta: { title: '报告详情', hidden: true, requiresAuth: true },
+  },
 ]
 
 const router = createRouter({
@@ -40,9 +52,9 @@ router.beforeEach((to, from, next) => {
   next()
 })
 
-// 自选股页面需要登录（未登录弹出登录框，停留在当前页面）
+// 需要登录的路由（未登录弹出登录框，停留在当前页面）
 router.beforeEach(async (to, from, next) => {
-  if (to.path === '/watchlist') {
+  if (to.meta.requiresAuth || to.path === '/watchlist') {
     const mod = await import('../store/user')
     const userStore = mod.useUserStore()
     if (!userStore.isLoggedIn) {
