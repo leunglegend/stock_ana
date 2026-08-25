@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+venv/
+env/
+*.db
+*.sqlite
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
+
+# Superpowers SDD
+.superpowers/
