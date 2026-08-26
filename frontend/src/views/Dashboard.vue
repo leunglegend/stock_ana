@@ -109,7 +109,7 @@
               </el-button>
             </div>
           </template>
-          <div v-loading="loading.board" class="board-list">
+          <div v-loading="loading.board" class="board-list" :class="{ 'is-refreshing': isRefreshing }">
             <div
               v-for="(item, idx) in topBoards"
               :key="item.name"
@@ -158,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -193,6 +193,9 @@ const topBoards = ref([])
 
 // AI 点评
 const aiSummary = ref('')
+
+// 自动刷新状态（静默刷新时的轻微视觉提示）
+const isRefreshing = ref(false)
 
 async function loadMarketData() {
   loading.index = true
@@ -277,9 +280,49 @@ function goToBoard(name, type) {
   router.push({ path: '/board', query: { name, type } })
 }
 
+// 自动刷新定时器
+let refreshTimer = null
+const REFRESH_INTERVAL = 30000 // 30 秒
+
+function startAutoRefresh() {
+  if (refreshTimer) return
+  refreshTimer = setInterval(() => {
+    // 静默刷新：短暂的透明度变化提示正在刷新，不显示 loading
+    isRefreshing.value = true
+    Promise.all([
+      loadMarketData().catch(() => {}),
+      loadTopBoards().catch(() => {})
+    ]).finally(() => {
+      setTimeout(() => {
+        isRefreshing.value = false
+      }, 200)
+    })
+  }, REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
 onMounted(() => {
   loadMarketData()
   loadTopBoards()
+  // 页面加载后自动生成 AI 市场点评
+  generateAiSummary()
+  // 启动自动刷新（30秒）
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+  // 关闭 SSE 连接
+  if (aiSummarySse) {
+    aiSummarySse.close()
+    aiSummarySse = null
+  }
 })
 </script>
 
@@ -375,6 +418,7 @@ onMounted(() => {
   color: #1f2937;
   line-height: 1.2;
   margin-bottom: 8px;
+  transition: color 0.3s ease;
 }
 .up .index-price { color: #ef4444; }
 .down .index-price { color: #10b981; }
@@ -384,6 +428,7 @@ onMounted(() => {
   gap: 16px;
   font-size: 14px;
   font-weight: 600;
+  transition: color 0.3s ease;
 }
 .up .index-change { color: #ef4444; }
 .down .index-change { color: #10b981; }
@@ -447,8 +492,11 @@ onMounted(() => {
   padding: 12px 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, opacity 0.3s ease;
   gap: 12px;
+}
+.board-list.is-refreshing .board-item {
+  opacity: 0.85;
 }
 .board-item:hover {
   background: #f5f3ff;

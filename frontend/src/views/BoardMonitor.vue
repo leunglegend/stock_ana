@@ -82,7 +82,25 @@
           </div>
         </div>
 
-        <el-table :data="boardStocks" style="width: 100%" @row-click="goToStock">
+        <!-- 加载失败提示 -->
+        <div v-if="detailError" class="detail-error">
+          <el-empty description="成分股数据加载失败">
+            <el-button type="primary" @click="retryLoadDetail">重新加载</el-button>
+          </el-empty>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-else-if="boardStocks.length === 0 && !loading.detail" class="detail-empty">
+          <el-empty description="暂无成分股数据" />
+        </div>
+
+        <!-- 成分股列表 -->
+        <el-table
+          v-else
+          :data="boardStocks"
+          style="width: 100%"
+          @row-click="goToStock"
+        >
           <el-table-column prop="name" label="名称" width="120">
             <template #default="{ row }">
               <div class="stock-name">
@@ -148,6 +166,7 @@ const currentBoardName = ref('')
 const currentBoardType = ref('')
 const boardStocks = ref([])
 const boardDetailChange = ref(0)
+const detailError = ref(false)
 
 async function loadIndustryBoards() {
   loading.industry = true
@@ -187,7 +206,13 @@ async function showBoardDetail(name, type) {
   currentBoardName.value = name
   currentBoardType.value = type
   detailVisible.value = true
+  detailError.value = false
+  await loadBoardDetail(name, type)
+}
+
+async function loadBoardDetail(name, type) {
   loading.detail = true
+  detailError.value = false
 
   try {
     const data = await getBoardStocks(type, name)
@@ -196,13 +221,20 @@ async function showBoardDetail(name, type) {
     if (data.length > 0) {
       const avgChange = data.reduce((sum, s) => sum + (s.change_pct || 0), 0) / data.length
       boardDetailChange.value = avgChange
+    } else {
+      boardDetailChange.value = 0
     }
   } catch (e) {
     boardStocks.value = []
     boardDetailChange.value = 0
+    detailError.value = true
   } finally {
     loading.detail = false
   }
+}
+
+function retryLoadDetail() {
+  loadBoardDetail(currentBoardName.value, currentBoardType.value)
 }
 
 function goToStock(row) {
@@ -348,6 +380,10 @@ onMounted(() => {
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+.detail-error,
+.detail-empty {
+  padding: 40px 0;
 }
 .drawer-change {
   font-size: 28px;

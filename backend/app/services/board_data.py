@@ -135,17 +135,26 @@ def get_board_stocks(board_name: str, board_type: str = "industry") -> Optional[
     :param board_name: 板块名称
     :param board_type: industry / concept
     """
+    import concurrent.futures
+
     ak = _get_ak()
     errors = []
+    timeout_seconds = 15  # 总超时时间，避免接口卡住
 
-    # 数据源：东方财富
-    try:
+    def _fetch():
         if board_type == "industry":
-            df = _fetch_board_industry_cons_em(ak, board_name)
+            return _fetch_board_industry_cons_em(ak, board_name)
         else:
-            df = _fetch_board_concept_cons_em(ak, board_name)
+            return _fetch_board_concept_cons_em(ak, board_name)
 
+    # 数据源1：东方财富（带超时控制）
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_fetch)
+            df = future.result(timeout=timeout_seconds)
         return _parse_board_stocks(df)
+    except concurrent.futures.TimeoutError:
+        errors.append(f"东财: 超时({timeout_seconds}s)")
     except Exception as e:
         errors.append(f"东财:{e}")
 
