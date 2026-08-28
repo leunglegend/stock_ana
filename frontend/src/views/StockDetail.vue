@@ -7,26 +7,27 @@
         <div class="stock-title">
           <h1 class="stock-name">{{ stockInfo?.name || '--' }}</h1>
           <span class="stock-code">{{ stockInfo?.code || code }}</span>
-          <el-tag
+          <el-button
             v-if="isWatched"
             type="warning"
-            effect="light"
+            plain
             size="small"
+            :icon="StarFilled"
             @click="removeFromWatchlist"
-            class="watch-tag"
+            class="watch-btn"
           >
-            <el-icon><StarFilled /></el-icon>
             已自选
-          </el-tag>
-          <el-tag
+          </el-button>
+          <el-button
             v-else
+            type="primary"
             size="small"
+            :icon="Star"
             @click="addToWatchlist"
-            class="watch-tag add-tag"
+            class="watch-btn"
           >
-            <el-icon><Star /></el-icon>
             加自选
-          </el-tag>
+          </el-button>
         </div>
       </div>
       <div class="header-right" v-if="stockInfo">
@@ -225,21 +226,21 @@ function startAnalyze() {
   )
 }
 
-function addToWatchlist() {
+async function addToWatchlist() {
   if (!stockInfo.value) return
-  const success = store.addStock({
+  const success = await store.addStock({
     code: stockInfo.value.code,
     name: stockInfo.value.name,
   })
   if (success) {
-    ElMessage.success('已添加到自选')
+    ElMessage.success(`已添加「${stockInfo.value.name}」到自选`)
   } else {
     ElMessage.warning('已在自选列表中')
   }
 }
 
-function removeFromWatchlist() {
-  store.removeStock(code.value)
+async function removeFromWatchlist() {
+  await store.removeStock(code.value)
   ElMessage.success('已移出自选')
 }
 
@@ -292,16 +293,8 @@ onMounted(() => {
   font-size: 16px;
   color: #6b7280;
 }
-.watch-tag {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.add-tag {
-  background: #fff;
-  border-color: #d1d5db;
-  color: #6b7280;
+.watch-btn {
+  margin-left: 12px;
 }
 
 .header-right {
