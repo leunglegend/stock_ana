@@ -76,7 +76,7 @@ import { computed } from 'vue'
 import { useRoute, RouterLink, RouterView } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  TrendCharts, Odometer, Star, DataAnalysis, Document, User, ArrowDown, SwitchButton,
+  TrendCharts, Odometer, Search, Star, DataAnalysis, Document, User, ArrowDown, SwitchButton,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import NotificationBell from './NotificationBell.vue'
@@ -86,6 +86,7 @@ const userStore = useUserStore()
 
 const menuItems = computed(() => [
   { path: '/', title: '市场概览', icon: 'Odometer' },
+  { path: '/search', title: '搜索个股', icon: 'Search' },
   { path: '/watchlist', title: '自选股', icon: 'Star' },
   { path: '/board', title: '板块监控', icon: 'DataAnalysis' },
   { path: '/reports', title: '复盘报告', icon: 'Document' },
