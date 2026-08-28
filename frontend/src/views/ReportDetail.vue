@@ -123,6 +123,19 @@
                 <div class="stock-info">
                   <span class="stock-name">{{ stock.stock_name }}</span>
                   <span class="stock-code">{{ stock.stock_code }}</span>
+                  <!-- 评分徽章 -->
+                  <span
+                    v-if="extractStockScore(stock)"
+                    class="score-badge"
+                    :style="{
+                      background: getRatingStyle(extractStockScore(stock).rating).bg,
+                      color: getRatingStyle(extractStockScore(stock).rating).color,
+                      borderColor: getRatingStyle(extractStockScore(stock).rating).border
+                    }"
+                  >
+                    <span class="badge-score">{{ extractStockScore(stock).score }}</span>
+                    <span class="badge-rating">{{ extractStockScore(stock).rating }}</span>
+                  </span>
                 </div>
                 <div class="stock-meta">
                   <span
@@ -137,7 +150,7 @@
               <div class="stock-summary">{{ stock.summary || stock.analysis_text?.substring(0, 60) + '...' }}</div>
             </template>
             <div class="stock-analysis-content">
-              <div v-if="stock.analysis_text" class="analysis-text" v-html="renderMarkdown(stock.analysis_text)"></div>
+              <div v-if="stock.analysis_text" class="analysis-text" v-html="renderMarkdown(cleanAnalysisText(stock.analysis_text))"></div>
               <el-empty v-else description="暂无分析内容" :image-size="50" />
             </div>
           </el-collapse-item>
@@ -252,6 +265,41 @@ function renderMarkdown(text) {
   } catch (e) {
     return text.replace(/\n/g, '<br>')
   }
+}
+
+// 从分析文本中提取评分数据
+function extractStockScore(stock) {
+  if (!stock?.analysis_text) return null
+  const text = stock.analysis_text
+  const match = text.match(/```json\s*([\s\S]*?)\s*```/)
+  if (!match) return null
+  try {
+    const data = JSON.parse(match[1].trim())
+    if (typeof data.score === 'number' && data.score >= 0 && data.score <= 100) {
+      return data
+    }
+    return null
+  } catch (e) {
+    return null
+  }
+}
+
+// 去除 analysis_text 中的 JSON 代码块，用于显示正文
+function cleanAnalysisText(text) {
+  if (!text) return ''
+  return text.replace(/```json\s*[\s\S]*?```\s*/, '').trim()
+}
+
+// 评级颜色配置
+function getRatingStyle(rating) {
+  const map = {
+    '强烈买入': { color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    '买入': { color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+    '观望': { color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+    '减仓': { color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+    '卖出': { color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
+  }
+  return map[rating] || map['观望']
 }
 
 onMounted(() => {
@@ -489,6 +537,26 @@ onMounted(() => {
 .stock-info .stock-code {
   font-size: 12px;
   color: #9ca3af;
+}
+
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.badge-score {
+  font-size: 13px;
+  font-weight: 700;
+}
+.badge-rating {
+  font-size: 11px;
+  opacity: 0.9;
 }
 
 .stock-meta {

@@ -15,13 +15,40 @@ SYSTEM_PROMPT = """你是一位资深的证券分析师，擅长A股市场的基
 要求：
 1. 分析要全面，涵盖公司基本面、财务状况、技术走势、估值水平等维度
 2. 语言要专业但通俗易懂，适合普通投资者阅读
-3. 投资建议要明确（买入/持有/观望/卖出），并给出充分的理由
+3. 投资建议要明确，并给出充分的理由
 4. 必须包含风险提示
 5. 不要编造数据，所有分析基于提供的数据
 6. 使用中文回答
-7. 字数控制在800-1200字左右
 
-输出格式：
+## 输出格式要求（严格遵守）
+
+先输出一个 JSON 代码块（评分数据），然后再输出 Markdown 详细分析。
+
+### 第一部分：评分 JSON（放在 ```json 代码块中）
+
+JSON 结构：
+{
+  "score": 综合评分0-100的整数,
+  "rating": "强烈买入" | "买入" | "观望" | "减仓" | "卖出",
+  "dimensions": {
+    "technical": 技术面评分0-100,
+    "fundamental": 基本面评分0-100,
+    "sentiment": 情绪面评分0-100,
+    "risk": 风险度评分0-100（分数越高风险越低）
+  },
+  "key_points": ["核心要点1", "核心要点2", "核心要点3"],
+  "action_advice": "一句话操作建议"
+}
+
+评分标准：
+- 80-100：强烈买入 — 高胜率机会，多维度共振向好
+- 60-79：买入 — 偏积极，主要维度向好，少量存疑
+- 40-59：观望 — 信号分歧或确认不足，等待触发条件
+- 20-39：减仓 — 风险明显抬升，优先降低暴露
+- 0-19：卖出 — 趋势或风险显著恶化，优先退出
+
+### 第二部分：详细分析（Markdown 格式）
+
 ## 一、公司概况
 ## 二、财务健康度分析
 ## 三、技术面分析
@@ -335,8 +362,17 @@ STOCK_DAILY_ANALYSIS_SYSTEM_PROMPT = """你是一位专业的盘后股票分析�
 7. analysis_text 控制在 300-500 字左右，使用 Markdown 格式
 8. summary 为一句话摘要，50 字以内
 
-输出必须是严格的 JSON 格式，包含两个字段：
+评分标准：
+- 80-100：强烈买入 — 高胜率机会，多维度共振向好
+- 60-79：买入 — 偏积极，主要维度向好
+- 40-59：观望 — 信号分歧或确认不足
+- 20-39：减仓 — 风险明显抬升
+- 0-19：卖出 — 趋势或风险显著恶化
+
+输出必须是严格的 JSON 格式，包含以下字段：
 {
+    "score": 0-100整数评分,
+    "rating": "强烈买入|买入|观望|减仓|卖出",
     "analysis_text": "详细分析内容...",
     "summary": "一句话摘要"
 }
@@ -408,6 +444,65 @@ def _extract_json(text: str) -> Optional[dict]:
         return json.loads(json_str)
     except (json.JSONDecodeError, ValueError):
         return None
+
+
+def parse_analysis_score(text: str) -> Optional[dict]:
+    """
+    从 AI 分析文本中提取评分数据。
+    返回 {score, rating, dimensions, key_points, action_advice, content}，
+    其中 content 是去除了 JSON 代码块后的纯 Markdown 分析内容。
+    """
+    if not text:
+        return None
+
+    import re
+
+    # 先找 ```json ... ``` 代码块
+    match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+    score_data = None
+    clean_text = text
+
+    if match:
+        json_str = match.group(1).strip()
+        try:
+            score_data = json.loads(json_str)
+            # 去除 JSON 代码块，保留纯分析内容
+            clean_text = (text[:match.start()] + text[match.end():]).strip()
+        except Exception:
+            # JSON 解析失败，用 _extract_json 兜底
+            score_data = _extract_json(text)
+    else:
+        # 没有代码块，尝试直接提取
+        score_data = _extract_json(text)
+
+    if not score_data:
+        return None
+
+    # 校验 score 字段
+    score = score_data.get("score")
+    if not isinstance(score, (int, float)) or score < 0 or score > 100:
+        return None
+
+    return {
+        "score": int(score),
+        "rating": score_data.get("rating", "观望"),
+        "dimensions": score_data.get("dimensions", {}),
+        "key_points": score_data.get("key_points", []),
+        "action_advice": score_data.get("action_advice", ""),
+        "content": clean_text,
+    }
+
+
+def get_rating_info(rating: str) -> dict:
+    """根据评级返回颜色和等级信息"""
+    mapping = {
+        "强烈买入": {"color": "#dc2626", "level": "strong_buy", "bg_color": "#fef2f2"},
+        "买入": {"color": "#ef4444", "level": "buy", "bg_color": "#fef2f2"},
+        "观望": {"color": "#d97706", "level": "watch", "bg_color": "#fffbeb"},
+        "减仓": {"color": "#059669", "level": "reduce", "bg_color": "#ecfdf5"},
+        "卖出": {"color": "#10b981", "level": "sell", "bg_color": "#ecfdf5"},
+    }
+    return mapping.get(rating, mapping["观望"])
 
 
 def generate_stock_daily_analysis(

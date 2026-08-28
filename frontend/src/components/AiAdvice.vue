@@ -47,8 +47,53 @@
         <p class="loading-sub">整合行情、财务、技术面多维度信息，生成专业投资建议</p>
       </div>
 
-      <!-- 分析结果（用 pre 保留原始换行，最可靠） -->
+      <!-- 分析结果 -->
       <div v-else class="report-content">
+        <!-- 评分仪表盘 -->
+        <div v-if="scoreData" class="score-dashboard">
+          <div class="score-main" :style="{ borderColor: currentRatingConfig.borderColor, background: currentRatingConfig.bgColor }">
+            <div class="score-number">
+              <span class="score-value" :style="{ color: currentRatingConfig.color }">{{ scoreData.score }}</span>
+              <span class="score-max">/ 100</span>
+            </div>
+            <div class="score-rating" :style="{ color: currentRatingConfig.color }">
+              {{ scoreData.rating }}
+            </div>
+          </div>
+
+          <!-- 操作建议 -->
+          <div v-if="scoreData.action_advice" class="action-advice">
+            <span class="advice-icon">💡</span>
+            <span>{{ scoreData.action_advice }}</span>
+          </div>
+
+          <!-- 核心要点 -->
+          <div v-if="scoreData.key_points?.length" class="key-points">
+            <div class="key-points-title">核心要点</div>
+            <ul>
+              <li v-for="(point, idx) in scoreData.key_points" :key="idx">
+                {{ point }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- 各维度评分 -->
+          <div v-if="scoreData.dimensions" class="dimension-scores">
+            <div class="dimension-item" v-for="(label, key) in dimensionLabels" :key="key">
+              <div class="dim-label">{{ label }}</div>
+              <div class="dim-bar">
+                <div
+                  class="dim-fill"
+                  :style="{
+                    width: (scoreData.dimensions[key] || 0) + '%',
+                    background: getDimensionColor(scoreData.dimensions[key])
+                  }"
+                ></div>
+              </div>
+              <div class="dim-score">{{ scoreData.dimensions[key] || 0 }}</div>
+            </div>
+          </div>
+        </div>
         <div class="report-text">
           <template v-for="(block, idx) in textBlocks" :key="idx">
             <!-- 二级标题 -->
@@ -108,11 +153,68 @@ const props = defineProps({
 
 defineEmits(['start-analyze'])
 
+// 解析 AI 返回中的评分数据
+const scoreData = computed(() => {
+  if (!props.advice || props.analyzing) return null
+
+  const text = props.advice
+  // 找 ```json ... ``` 代码块
+  const match = text.match(/```json\s*([\s\S]*?)\s*```/)
+  if (!match) return null
+
+  try {
+    const data = JSON.parse(match[1].trim())
+    if (typeof data.score === 'number' && data.score >= 0 && data.score <= 100) {
+      return data
+    }
+    return null
+  } catch (e) {
+    return null
+  }
+})
+
+// 评级配置
+const ratingConfig = {
+  '强烈买入': { color: '#dc2626', bgColor: '#fef2f2', borderColor: '#fecaca' },
+  '买入': { color: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca' },
+  '观望': { color: '#d97706', bgColor: '#fffbeb', borderColor: '#fde68a' },
+  '减仓': { color: '#059669', bgColor: '#ecfdf5', borderColor: '#a7f3d0' },
+  '卖出': { color: '#10b981', bgColor: '#ecfdf5', borderColor: '#a7f3d0' },
+}
+
+const currentRatingConfig = computed(() => {
+  if (!scoreData.value?.rating) return ratingConfig['观望']
+  return ratingConfig[scoreData.value.rating] || ratingConfig['观望']
+})
+
+// 维度显示配置
+const dimensionLabels = {
+  technical: '技术面',
+  fundamental: '基本面',
+  sentiment: '情绪面',
+  risk: '风险防御',
+}
+
+function getDimensionColor(score) {
+  const s = Number(score) || 0
+  if (s >= 70) return '#10b981'
+  if (s >= 50) return '#f59e0b'
+  return '#ef4444'
+}
+
+// 用于显示正文的纯文本（去掉了 JSON 代码块）
+const cleanAdviceText = computed(() => {
+  if (!props.advice) return ''
+  if (!scoreData.value) return props.advice
+  // 去掉 ```json ... ``` 代码块
+  return props.advice.replace(/```json\s*[\s\S]*?```\s*/, '').trim()
+})
+
 // 把文本逐行解析为块级元素
 const textBlocks = computed(() => {
-  if (!props.advice) return []
+  if (!cleanAdviceText.value) return []
 
-  let text = props.advice
+  let text = cleanAdviceText.value
 
   // 找到第一个标题（去掉前面的状态提示）
   const h2Match = text.match(/##\s+.+/)
@@ -267,6 +369,116 @@ function formatInline(text) {
 
 /* 报告内容 */
 .report-content { padding: 8px 16px 16px; }
+
+/* 评分仪表盘 */
+.score-dashboard {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.score-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 2px solid;
+  margin-bottom: 16px;
+}
+.score-number {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.score-value {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+}
+.score-max {
+  font-size: 16px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+.score-rating {
+  font-size: 20px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.action-advice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f5f3ff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+.advice-icon {
+  font-size: 18px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.key-points {
+  margin-bottom: 16px;
+}
+.key-points-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+.key-points ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.key-points li {
+  margin-bottom: 4px;
+}
+.dimension-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+}
+.dimension-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.dim-label {
+  width: 60px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+.dim-bar {
+  flex: 1;
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dim-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.dim-score {
+  width: 28px;
+  text-align: right;
+  font-weight: 600;
+  color: #374151;
+  flex-shrink: 0;
+}
+
 .report-text {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #374151;
