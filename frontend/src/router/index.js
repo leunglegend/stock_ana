@@ -23,6 +23,12 @@ const routes = [
     meta: { title: '板块监控', icon: 'TrendCharts' },
   },
   {
+    path: '/search',
+    name: 'Search',
+    component: () => import('../views/Search.vue'),
+    meta: { title: '搜索个股', icon: 'Search' },
+  },
+  {
     path: '/stock/:code',
     name: 'StockDetail',
     component: () => import('../views/StockDetail.vue'),
