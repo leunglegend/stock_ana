@@ -64,7 +64,11 @@ function handleSearch(query) {
 
 function handleChange(value) {
   if (value) {
-    emit('select', value)
+    // 从 options 中找到完整的 stock 对象再 emit
+    const item = options.value.find(o => o.code === value)
+    if (item) {
+      emit('select', item)
+    }
   }
 }
 </script>

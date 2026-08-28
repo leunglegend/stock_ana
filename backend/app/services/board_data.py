@@ -17,6 +17,10 @@ _board_cache = {
 }
 _CACHE_TTL = 300  # 缓存5分钟
 
+# 板块成分股缓存（按板块名称缓存，避免频繁请求同一板块）
+_board_stocks_cache = {}
+_BOARD_STOCKS_CACHE_TTL = 120  # 缓存2分钟
+
 
 def get_industry_boards() -> Optional[List[BoardInfo]]:
     """
@@ -131,32 +135,63 @@ def get_concept_boards() -> Optional[List[BoardInfo]]:
 
 def get_board_stocks(board_name: str, board_type: str = "industry") -> Optional[List[BoardStock]]:
     """
-    获取板块成分股
+    获取板块成分股（多数据源 fallback + 缓存）
     :param board_name: 板块名称
     :param board_type: industry / concept
     """
     import concurrent.futures
 
+    cache_key = f"{board_type}:{board_name}"
+    now = time.time()
+
+    # 先查缓存
+    cached = _board_stocks_cache.get(cache_key)
+    if cached and (now - cached["time"]) < _BOARD_STOCKS_CACHE_TTL:
+        return cached["data"]
+
     ak = _get_ak()
     errors = []
-    timeout_seconds = 15  # 总超时时间，避免接口卡住
+    timeout_seconds = 12  # 单数据源超时时间，避免接口卡住
 
-    def _fetch():
+    def _fetch_em():
+        """数据源1：东方财富成分股"""
         if board_type == "industry":
             return _fetch_board_industry_cons_em(ak, board_name)
         else:
             return _fetch_board_concept_cons_em(ak, board_name)
 
-    # 数据源1：东方财富（带超时控制）
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_fetch)
-            df = future.result(timeout=timeout_seconds)
-        return _parse_board_stocks(df)
-    except concurrent.futures.TimeoutError:
-        errors.append(f"东财: 超时({timeout_seconds}s)")
-    except Exception as e:
-        errors.append(f"东财:{e}")
+    def _fetch_ths():
+        """数据源2：同花顺成分股"""
+        if board_type == "industry":
+            return ak.stock_board_industry_cons_ths(symbol=board_name)
+        else:
+            return ak.stock_board_concept_cons_ths(symbol=board_name)
+
+    # 尝试多个数据源
+    for source_name, fetch_fn in [
+        ("东方财富", _fetch_em),
+        ("同花顺", _fetch_ths),
+    ]:
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(fetch_fn)
+                df = future.result(timeout=timeout_seconds)
+            result = _parse_board_stocks(df)
+            if result:
+                # 写入缓存
+                _board_stocks_cache[cache_key] = {"data": result, "time": now}
+                return result
+            else:
+                errors.append(f"{source_name}: 返回空数据")
+        except concurrent.futures.TimeoutError:
+            errors.append(f"{source_name}: 超时({timeout_seconds}s)")
+        except Exception as e:
+            errors.append(f"{source_name}: {e}")
+
+    # 全部失败时，返回过期缓存（如果有的话）
+    if cached:
+        print(f"获取板块成分股 [{board_name}] 全部数据源失败，返回过期缓存: {'; '.join(errors)}")
+        return cached["data"]
 
     print(f"获取板块成分股失败 [{board_name}]: {'; '.join(errors)}")
     return None
@@ -335,18 +370,47 @@ def _parse_board_ths_summary(df) -> List[BoardInfo]:
 
 
 def _parse_board_stocks(df) -> List[BoardStock]:
-    """解析板块成分股数据"""
+    """解析板块成分股数据（兼容东财/同花顺等多数据源列名）"""
+    import math
+
+    def _get(row, *candidates, default=""):
+        for col in candidates:
+            if col in row and row.get(col) is not None:
+                val = row.get(col)
+                try:
+                    if isinstance(val, float) and math.isnan(val):
+                        continue
+                except Exception:
+                    pass
+                return val
+        return default
+
+    def _get_float(row, *candidates, default=0.0):
+        val = _get(row, *candidates, default=None)
+        if val is None or val == "":
+            return default
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
     result = []
     for _, row in df.iterrows():
+        code = str(_get(row, "代码", "股票代码", "证券代码", "A股代码")).strip()
+        name = str(_get(row, "名称", "股票简称", "证券简称", "A股简称")).strip()
+        # 跳过无效行
+        if not code or code == "nan" or not name or name == "nan":
+            continue
         result.append(BoardStock(
-            code=str(row.get("代码", row.get("股票代码", ""))),
-            name=str(row.get("名称", row.get("股票简称", ""))),
-            price=float(row.get("最新价", 0) or 0),
-            change_pct=float(row.get("涨跌幅", 0) or 0),
-            change_amount=float(row.get("涨跌额", 0) or 0),
-            turnover_rate=float(row.get("换手率", 0) or 0),
-            pe=float(row.get("市盈率", 0) or 0) if "市盈率" in df.columns else None,
-            total_mv=float(row.get("总市值", 0) or 0) / 100000000 if "总市值" in df.columns else None,
+            code=code,
+            name=name,
+            price=_get_float(row, "最新价", "现价", "收盘"),
+            change_pct=_get_float(row, "涨跌幅", "涨幅", "涨跌幅(%)"),
+            change_amount=_get_float(row, "涨跌额", "涨跌"),
+            turnover_rate=_get_float(row, "换手率", "换手"),
+            pe=_get_float(row, "市盈率", "市盈率(动态)") if "市盈率" in df.columns or "市盈率(动态)" in df.columns else None,
+            total_mv=_get_float(row, "总市值", "市价总值") / 100000000 if "总市值" in df.columns or "市价总值" in df.columns else None,
         ))
+    # 按涨跌幅排序（从高到低）
     result.sort(key=lambda x: x.change_pct, reverse=True)
     return result
