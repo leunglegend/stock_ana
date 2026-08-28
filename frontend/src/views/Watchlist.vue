@@ -147,22 +147,66 @@
         <el-form-item label="搜索股票">
           <StockSearch @select="onStockSelect" />
         </el-form-item>
-        <el-form-item v-if="selectedStock" label="股票信息">
-          <div class="selected-stock">
-            <span class="name">{{ selectedStock.name }}</span>
-            <span class="code">{{ selectedStock.code }}</span>
-            <el-tag type="success" size="small" v-if="isWatched(selectedStock.code)">已关注</el-tag>
+        <!-- 选中股票信息卡片 -->
+        <div v-if="selectedStock" class="selected-stock-card card-shadow">
+          <div class="stock-main">
+            <div class="stock-name-row">
+              <span class="stock-name">{{ selectedStock.name }}</span>
+              <span class="stock-code">{{ selectedStock.code }}</span>
+              <el-tag
+                v-if="isWatched(selectedStock.code)"
+                type="success"
+                size="small"
+                effect="light"
+              >已关注</el-tag>
+            </div>
+            <div class="stock-price-row" v-loading="stockInfoLoading">
+              <template v-if="stockInfo">
+                <span class="price" :class="priceClass(stockInfo)">
+                  {{ stockInfo.price?.toFixed(2) || '--' }}
+                </span>
+                <span class="change" :class="priceClass(stockInfo)">
+                  {{ stockInfo.change_pct > 0 ? '+' : '' }}{{ stockInfo.change_pct?.toFixed(2) }}%
+                </span>
+              </template>
+              <template v-else>
+                <span class="price-placeholder">行情加载中...</span>
+              </template>
+            </div>
           </div>
-        </el-form-item>
-        <el-form-item v-if="selectedStock" label="成本价（可选）">
+          <div class="stock-stats" v-if="stockInfo">
+            <div class="stat-item">
+              <span class="stat-label">开盘</span>
+              <span class="stat-value">{{ stockInfo.open?.toFixed(2) || '--' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">最高</span>
+              <span class="stat-value up">{{ stockInfo.high?.toFixed(2) || '--' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">最低</span>
+              <span class="stat-value down">{{ stockInfo.low?.toFixed(2) || '--' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">昨收</span>
+              <span class="stat-value">{{ stockInfo.pre_close?.toFixed(2) || '--' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <el-form-item v-if="selectedStock" label="成本价（可选）" class="cost-form-item">
           <el-input-number
+            ref="costInputRef"
             v-model="costPrice"
             :precision="2"
             :step="0.01"
             :min="0"
-            placeholder="输入成本价"
+            placeholder="输入成本价，默认为 0"
             style="width: 100%"
           />
+          <div class="cost-tip">
+            设置成本价后可自动计算盈亏，也可以之后再设置
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -199,7 +243,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -216,9 +260,12 @@ const loading = ref(false)
 const showAddDialog = ref(false)
 const showCostDialog = ref(false)
 const selectedStock = ref(null)
+const stockInfo = ref(null)
+const stockInfoLoading = ref(false)
 const currentStock = ref(null)
 const costPrice = ref(0)
 const stockListData = ref([])
+const costInputRef = ref(null)
 
 const activeGroup = computed({
   get: () => store.activeGroup,
@@ -301,9 +348,26 @@ async function loadStockPrices() {
   }
 }
 
-function onStockSelect(stock) {
+async function onStockSelect(stock) {
   selectedStock.value = stock
+  stockInfo.value = null
   costPrice.value = 0
+
+  // 加载实时行情
+  stockInfoLoading.value = true
+  try {
+    const info = await getStockInfo(stock.code)
+    stockInfo.value = info
+  } catch (e) {
+    console.error('加载股票行情失败:', e)
+  } finally {
+    stockInfoLoading.value = false
+  }
+
+  // 自动聚焦到成本价输入框
+  nextTick(() => {
+    costInputRef.value?.focus?.()
+  })
 }
 
 function isWatched(code) {
@@ -394,6 +458,15 @@ function handleGroupCommand(cmd) {
 
 watch(() => store.activeGroup, () => {
   loadStockPrices()
+})
+
+// 对话框关闭时清空选中状态
+watch(showAddDialog, (val) => {
+  if (!val) {
+    selectedStock.value = null
+    stockInfo.value = null
+    costPrice.value = 0
+  }
 })
 
 onMounted(() => {
@@ -492,19 +565,85 @@ onMounted(() => {
   color: #9ca3af;
 }
 
-.selected-stock {
+/* 选中股票信息卡片 */
+.selected-stock-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.selected-stock-card .stock-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.selected-stock-card .stock-name-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
-.selected-stock .name {
-  font-size: 16px;
-  font-weight: 600;
+.selected-stock-card .stock-name {
+  font-size: 17px;
+  font-weight: 700;
   color: #1f2937;
 }
-.selected-stock .code {
+.selected-stock-card .stock-code {
   font-size: 13px;
-  color: #6b7280;
+  color: #9ca3af;
+  font-family: ui-monospace, monospace;
+}
+.selected-stock-card .stock-price-row {
+  text-align: right;
+  min-width: 140px;
+}
+.selected-stock-card .price {
+  font-size: 24px;
+  font-weight: 700;
+  margin-right: 8px;
+}
+.selected-stock-card .change {
+  font-size: 14px;
+  font-weight: 600;
+}
+.selected-stock-card .price-placeholder {
+  font-size: 14px;
+  color: #9ca3af;
+}
+.selected-stock-card .stock-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+.selected-stock-card .stat-item {
+  text-align: center;
+}
+.selected-stock-card .stat-label {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.selected-stock-card .stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+.selected-stock-card .stat-value.up { color: #ef4444; }
+.selected-stock-card .stat-value.down { color: #10b981; }
+
+/* 成本价输入 */
+.cost-form-item {
+  margin-bottom: 0;
+}
+.cost-tip {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 6px;
 }
 
 /* 行背景色（涨跌颜色淡背景） */
