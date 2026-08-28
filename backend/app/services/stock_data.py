@@ -370,66 +370,177 @@ def get_kline_data(code: str, period: str = "daily", days: int = 250) -> Optiona
         return None
 
 
+def _parse_value_with_unit(val_str) -> Optional[float]:
+    """
+    解析带单位的数值字符串，如 '4172.63万'、'1.97亿'、'3.14'、'--'
+    返回纯数字（单位统一为亿）
+    """
+    if val_str is None:
+        return None
+    s = str(val_str).strip()
+    if not s or s in ('--', '-', 'NaN', 'nan', 'None', 'null'):
+        return None
+    try:
+        if '亿' in s:
+            num = float(s.replace('亿', ''))
+            return num
+        elif '万' in s:
+            num = float(s.replace('万', ''))
+            return num / 10000  # 万转亿
+        else:
+            return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_float(val) -> Optional[float]:
+    """
+    安全转 float，空值/NaN 返回 None
+    支持带 % 的字符串（自动去掉 % 后转换）
+    """
+    if val is None:
+        return None
+    pd = _get_pd()
+    try:
+        s = str(val).strip()
+        if s.endswith('%'):
+            s = s[:-1].strip()
+        f = float(s)
+        if pd.isna(f):
+            return None
+        return f
+    except (ValueError, TypeError):
+        return None
+
+
 def get_financial_data(code: str) -> Optional[FinancialData]:
     """
-    获取财务数据
+    获取财务数据（多数据源 fallback）
+    估值指标：stock_value_em（主力）
+    财务指标：stock_financial_abstract_ths（主力）+ stock_financial_analysis_indicator（备用）
     """
     code = _normalize_code(code)
+    ak = _get_ak()
+    pd = _get_pd()
     result = FinancialData(code=code, name=code)
 
     try:
         # 从缓存获取股票名称
         result.name = _get_stock_name_from_cache(code)
 
-        # 获取估值指标（PE/PB等）
+        # ========== 估值指标（PE/PB/总市值）==========
+        # 数据源1：stock_value_em（东财估值分析，含 PE/PB/总市值 历史数据）
         try:
-            df = _get_ak().stock_a_indicator_lg(symbol=code)
-            if not df.empty:
-                latest = df.iloc[-1]
-                result.pe = float(latest.get("pe", 0) or 0)
-                result.pb = float(latest.get("pb", 0) or 0)
-                result.total_mv = float(latest.get("total_mv", 0) or 0) / 10000  # 万元转亿
+            df = ak.stock_value_em(symbol=code)
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]  # 最新一期在最后
+                result.pe = _safe_float(latest.get("PE(TTM)"))
+                result.pb = _safe_float(latest.get("市净率"))
+                total_mv = _safe_float(latest.get("总市值"))
+                if total_mv is not None:
+                    result.total_mv = total_mv / 1e8  # 元转亿
         except Exception as e:
-            print(f"获取估值指标失败: {e}")
+            print(f"获取估值指标(value_em)失败: {e}")
 
-        # 获取主要财务指标
+        # ========== 财务指标 ==========
+        # 数据源1：同花顺财务摘要（主力，数据完整且准确）
         try:
-            df = _get_ak().stock_financial_analysis_indicator(symbol=code)
-            if not df.empty:
-                latest = df.iloc[0]  # 最新一期
-                result.report_date = str(latest.index[0]) if hasattr(latest, 'index') else None
+            df = ak.stock_financial_abstract_ths(symbol=code, indicator="按报告期")
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]  # 最新一期在最后
 
-                # ROE
-                for col in ["净资产收益率(%)", "净资产收益率", "加权净资产收益率"]:
-                    if col in latest:
-                        result.roe = float(latest[col]) if _get_pd().notna(latest[col]) else None
-                        break
+                # 报告期
+                if "报告期" in latest:
+                    result.report_date = str(latest["报告期"])
 
-                # 净利润
-                for col in ["净利润(亿元)", "净利润", "归属于母公司所有者的净利润"]:
+                # ROE（净资产收益率）
+                for col in ["净资产收益率", "净资产收益率-摊薄", "净资产收益率(%)"]:
                     if col in latest:
-                        result.net_profit = float(latest[col]) if _get_pd().notna(latest[col]) else None
-                        break
+                        result.roe = _safe_float(latest[col])
+                        if result.roe is not None:
+                            break
 
-                # 营业收入
-                for col in ["营业收入(亿元)", "营业收入"]:
+                # 净利润（带单位，解析为亿）
+                for col in ["净利润", "扣非净利润"]:
                     if col in latest:
-                        result.revenue = float(latest[col]) if _get_pd().notna(latest[col]) else None
-                        break
+                        val = _parse_value_with_unit(latest[col])
+                        if val is not None:
+                            result.net_profit = val
+                            break
+
+                # 营业收入（带单位，解析为亿）
+                for col in ["营业总收入", "营业收入"]:
+                    if col in latest:
+                        val = _parse_value_with_unit(latest[col])
+                        if val is not None:
+                            result.revenue = val
+                            break
 
                 # 毛利率
-                for col in ["销售毛利率(%)", "毛利率"]:
+                for col in ["销售毛利率", "销售毛利率(%)", "毛利率"]:
                     if col in latest:
-                        result.gross_margin = float(latest[col]) if _get_pd().notna(latest[col]) else None
-                        break
+                        result.gross_margin = _safe_float(latest[col])
+                        if result.gross_margin is not None:
+                            break
 
                 # 净利率
-                for col in ["销售净利率(%)", "净利率"]:
+                for col in ["销售净利率", "销售净利率(%)", "净利率"]:
                     if col in latest:
-                        result.net_margin = float(latest[col]) if _get_pd().notna(latest[col]) else None
-                        break
+                        result.net_margin = _safe_float(latest[col])
+                        if result.net_margin is not None:
+                            break
         except Exception as e:
-            print(f"获取财务指标失败: {e}")
+            print(f"获取财务指标(ths_abstract)失败: {e}")
+
+            # 数据源2：东财财务分析指标（备用）
+            if result.roe is None and result.net_profit is None:
+                try:
+                    df = ak.stock_financial_analysis_indicator(symbol=code)
+                    if df is not None and not df.empty:
+                        latest = df.iloc[-1]  # 最新一期在最后
+
+                        # 报告期
+                        if "日期" in latest:
+                            result.report_date = str(latest["日期"])
+
+                        # ROE
+                        for col in ["净资产收益率(%)", "净资产收益率", "加权净资产收益率(%)"]:
+                            if col in latest:
+                                result.roe = _safe_float(latest[col])
+                                if result.roe is not None:
+                                    break
+
+                        # 净利润（东财单位是元）
+                        for col in ["净利润(亿元)", "净利润", "归属于母公司所有者的净利润"]:
+                            if col in latest:
+                                val = _safe_float(latest[col])
+                                if val is not None:
+                                    result.net_profit = val
+                                    break
+
+                        # 营业收入
+                        for col in ["营业收入(亿元)", "营业收入"]:
+                            if col in latest:
+                                val = _safe_float(latest[col])
+                                if val is not None:
+                                    result.revenue = val
+                                    break
+
+                        # 毛利率
+                        for col in ["销售毛利率(%)", "毛利率"]:
+                            if col in latest:
+                                result.gross_margin = _safe_float(latest[col])
+                                if result.gross_margin is not None:
+                                    break
+
+                        # 净利率
+                        for col in ["销售净利率(%)", "净利率"]:
+                            if col in latest:
+                                result.net_margin = _safe_float(latest[col])
+                                if result.net_margin is not None:
+                                    break
+                except Exception as e2:
+                    print(f"获取财务指标(em_analysis)失败: {e2}")
 
         return result
     except Exception as e:
