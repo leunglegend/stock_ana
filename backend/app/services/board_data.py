@@ -160,18 +160,18 @@ def get_board_stocks(board_name: str, board_type: str = "industry") -> Optional[
         else:
             return _fetch_board_concept_cons_em(ak, board_name)
 
-    def _fetch_ths():
-        """数据源2：同花顺成分股"""
-        if board_type == "industry":
-            return ak.stock_board_industry_cons_ths(symbol=board_name)
-        else:
-            return ak.stock_board_concept_cons_ths(symbol=board_name)
+    def _fetch_sina():
+        """数据源2：新浪行业成分股。"""
+        if board_type != "industry":
+            return None
+        return _fetch_board_stocks_sina(ak, board_name)
 
-    # 尝试多个数据源
-    for source_name, fetch_fn in [
-        ("东方财富", _fetch_em),
-        ("同花顺", _fetch_ths),
-    ]:
+    sources = (
+        [("新浪行业", _fetch_sina), ("东方财富", _fetch_em)]
+        if board_type == "industry"
+        else [("东方财富", _fetch_em)]
+    )
+    for source_name, fetch_fn in sources:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(fetch_fn)
@@ -247,6 +247,29 @@ def _fetch_board_concept_summary_ths(ak):
 def _fetch_board_concept_ths(ak):
     """同花顺-概念板块名称列表（仅名称代码，备用）"""
     return ak.stock_board_concept_name_ths()
+
+
+_SINA_INDUSTRY_ALIASES = {
+    "种植业与林业": ("农业", "林业"),
+}
+
+
+def _sina_industry_names(board_name: str):
+    aliases = _SINA_INDUSTRY_ALIASES.get(board_name)
+    return aliases or (board_name,)
+
+
+def _fetch_board_stocks_sina(ak, board_name: str):
+    """按行业名称从新浪板块列表匹配并合并成分股。"""
+    import pandas as pd
+
+    sectors = ak.stock_sector_spot(indicator="行业")
+    requested = _sina_industry_names(board_name)
+    matched = sectors[sectors["板块"].astype(str).isin(requested)]
+    if matched.empty:
+        raise ValueError(f"新浪行业未匹配到板块: {board_name}")
+    frames = [ak.stock_sector_detail(sector=row["label"]) for _, row in matched.iterrows()]
+    return pd.concat(frames, ignore_index=True).drop_duplicates(subset=["code"])
 
 
 def _parse_board_em(df) -> List[BoardInfo]:
@@ -396,21 +419,37 @@ def _parse_board_stocks(df) -> List[BoardStock]:
 
     result = []
     for _, row in df.iterrows():
-        code = str(_get(row, "代码", "股票代码", "证券代码", "A股代码")).strip()
-        name = str(_get(row, "名称", "股票简称", "证券简称", "A股简称")).strip()
+        code = str(_get(row, "代码", "股票代码", "证券代码", "A股代码", "code")).strip()
+        name = str(_get(row, "名称", "股票简称", "证券简称", "A股简称", "name")).strip()
         # 跳过无效行
         if not code or code == "nan" or not name or name == "nan":
             continue
         result.append(BoardStock(
             code=code,
             name=name,
-            price=_get_float(row, "最新价", "现价", "收盘"),
-            change_pct=_get_float(row, "涨跌幅", "涨幅", "涨跌幅(%)"),
-            change_amount=_get_float(row, "涨跌额", "涨跌"),
-            turnover_rate=_get_float(row, "换手率", "换手"),
-            pe=_get_float(row, "市盈率", "市盈率(动态)") if "市盈率" in df.columns or "市盈率(动态)" in df.columns else None,
-            total_mv=_get_float(row, "总市值", "市价总值") / 100000000 if "总市值" in df.columns or "市价总值" in df.columns else None,
+            price=_get_float(row, "最新价", "现价", "收盘", "trade"),
+            change_pct=_get_float(row, "涨跌幅", "涨幅", "涨跌幅(%)", "changepercent"),
+            change_amount=_get_float(row, "涨跌额", "涨跌", "pricechange"),
+            turnover_rate=_get_float(row, "换手率", "换手", "turnoverratio"),
+            pe=_parse_board_pe(row, df.columns, _get_float),
+            total_mv=_parse_board_mv(row, df.columns, _get_float),
         ))
     # 按涨跌幅排序（从高到低）
     result.sort(key=lambda x: x.change_pct, reverse=True)
     return result
+
+
+def _parse_board_pe(row, columns, get_float):
+    if "per" in columns:
+        return get_float(row, "per")
+    if "市盈率" in columns or "市盈率(动态)" in columns:
+        return get_float(row, "市盈率", "市盈率(动态)")
+    return None
+
+
+def _parse_board_mv(row, columns, get_float):
+    if "mktcap" in columns:
+        return get_float(row, "mktcap") / 10000
+    if "总市值" in columns or "市价总值" in columns:
+        return get_float(row, "总市值", "市价总值") / 100000000
+    return None

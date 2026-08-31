@@ -125,7 +125,7 @@ function formatAmount(amount) {
   gap: 8px;
   font-weight: 600;
   font-size: 16px;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .stock-info {
@@ -150,12 +150,12 @@ function formatAmount(amount) {
   font-size: 24px;
   font-weight: 700;
   margin: 0;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .stock-code {
   font-size: 16px;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 
@@ -185,15 +185,15 @@ function formatAmount(amount) {
 }
 
 .price-up {
-  color: #ef4444;
+  color: var(--text-positive);
 }
 
 .price-down {
-  color: #10b981;
+  color: var(--text-negative);
 }
 
 .price-neutral {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .data-grid {
@@ -209,13 +209,13 @@ function formatAmount(amount) {
 
 .data-item .label {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .data-item .value {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .empty-state {

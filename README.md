@@ -25,6 +25,7 @@
   - 整体风险提示
 - 🔔 **消息中心**：复盘完成通知，站内信实时提醒
 - 📑 **历史报告**：可查看所有历史复盘记录
+- 🖥️ **盘中监控**：聚合市场环境、自选股快照、技术信号和行动队列，支持定时刷新
 
 ## 技术栈
 
@@ -44,107 +45,125 @@
 
 ```
 stock-analyzer/
-├── frontend/          # Vue 前端
+├── start.sh                  # 构建前端并启动同源 Web 服务
+├── frontend/                 # Vue 3 前端
 │   ├── src/
-│   │   ├── components/   # 组件
-│   │   │   ├── StockSearch.vue     # 股票搜索
-│   │   │   ├── StockInfo.vue       # 行情信息
-│   │   │   ├── KLineChart.vue      # K线图
-│   │   │   ├── FinancialCard.vue   # 财务指标
-│   │   │   └── AiAdvice.vue        # AI 分析建议
-│   │   ├── views/
-│   │   │   └── Dashboard.vue       # 仪表盘主页
-│   │   ├── api/
-│   │   │   └── stock.js            # API 封装
-│   │   ├── App.vue
-│   │   └── main.js
-│   └── package.json
-└── backend/           # Python 后端
+│   │   ├── api/              # 后端 API 封装
+│   │   ├── components/       # 页面及基础组件
+│   │   ├── composables/      # 可复用组合式逻辑
+│   │   ├── router/           # 前端路由
+│   │   ├── store/            # Pinia 状态管理
+│   │   ├── styles/           # 主题与全局样式
+│   │   └── views/            # 业务页面
+│   ├── package.json
+│   └── vite.config.js        # 开发服务器及 API 代理
+├── backend/                  # FastAPI 后端
     ├── app/
-    │   ├── main.py         # FastAPI 入口
-    │   ├── config.py       # 配置
-    │   ├── routes/
-    │   │   └── stock.py    # 股票 API 路由
-    │   ├── services/
-    │   │   ├── stock_data.py   # AKShare 数据服务
-    │   │   └── ai_analyst.py   # AI 分析服务
-    │   └── models/
-    │       └── schemas.py  # 数据模型
+    │   ├── main.py            # 应用入口与生命周期
+    │   ├── config.py          # 环境变量配置
+    │   ├── database.py        # 数据库连接
+    │   ├── models/            # SQLAlchemy 数据模型
+    │   ├── routes/            # HTTP API 路由
+    │   ├── schemas/           # 请求与响应模型
+    │   └── services/          # 行情、AI、监控与复盘服务
+    ├── tests/                 # 后端测试
     ├── requirements.txt
     └── .env.example
+└── docs/                      # 设计与实施文档
 ```
 
 ## 快速开始
 
-### 1. 克隆项目
+### 环境要求
+
+- Linux 或 macOS（`start.sh` 需要 Bash）
+- Python 3.10+
+- Node.js 20.19+ 或 22.12+，以及 npm
+
+### 1. 安装后端依赖
 
 ```bash
-cd stock-analyzer
+python3 -m venv backend/venv
+backend/venv/bin/pip install -r backend/requirements.txt
 ```
 
-### 2. 启动后端
+### 2. 安装前端依赖
+
+```bash
+npm --prefix frontend install
+```
+
+### 3. 配置环境变量
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+按需编辑 `backend/.env`。行情、K 线和财务数据无需配置大模型；AI 分析、用户系统等功能需要对应配置。
+
+| 变量 | 是否必填 | 默认值 | 说明 |
+|------|----------|--------|------|
+| `ARK_API_KEY` / `ANTHROPIC_AUTH_TOKEN` | AI 功能必填 | 空 | Anthropic 兼容 API 密钥 |
+| `ARK_BASE_URL` / `ANTHROPIC_BASE_URL` | 否 | 火山引擎 Coding Plan 地址 | API 基础地址 |
+| `ARK_MODEL` | AI 功能必填 | `claude-3-5-sonnet-20241022` | 模型名称 |
+| `PORT` | 否 | `52764` | 同源 Web 服务端口 |
+| `DATABASE_URL` | 否 | `sqlite:///./stock_analyzer.db` | 数据库连接地址 |
+| `JWT_SECRET_KEY` | 用户功能必填 | 空 | JWT 签名密钥 |
+| `JWT_ACCESS_TOKEN_EXPIRE_HOURS` | 否 | `24` | 登录令牌有效期（小时） |
+| `SCHEDULER_ENABLED` | 否 | `true` | 是否启用盘后复盘定时任务 |
+| `DAILY_REPORT_CRON` | 否 | `30 15 * * 1-5` | 复盘任务 Cron 表达式 |
+
+生成 JWT 密钥：
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+不要将 `backend/.env` 提交到版本库。
+
+### 4. 一键启动
+
+```bash
+./start.sh
+```
+
+启动完成后可访问：
+
+- Web 应用：http://localhost:52764
+- API 文档：http://localhost:52764/docs
+- 健康检查：http://localhost:52764/health
+
+脚本会先构建 `frontend/dist`，再通过 `nohup` 在后台启动 FastAPI，由 `52764` 端口同时提供页面和 `/api` 接口。页面与接口使用同一个协议、主机和端口，因此不存在浏览器跨域请求。脚本不会自动安装依赖或创建 `.env`。
+
+运行信息：
+
+- PID：`backend/.runtime/stock-analyzer.pid`
+- 日志：`backend/.runtime/stock-analyzer.log`
+- 查看日志：`tail -f backend/.runtime/stock-analyzer.log`
+- 停止服务：`kill "$(cat backend/.runtime/stock-analyzer.pid)"`
+
+重复执行脚本时，如果 PID 对应的进程仍在运行，脚本会拒绝重复启动。
+
+### 手动启动
+
+需要前端热更新时，可在两个终端中进入开发模式。
+
+后端：
 
 ```bash
 cd backend
-
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入火山引擎 API Key
+source venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 52764
 ```
 
-配置 API（二选一）：
-
-**方式一：环境变量（推荐，更安全）**
-```bash
-export ANTHROPIC_AUTH_TOKEN=你的_api_key
-export ANTHROPIC_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
-export ARK_MODEL=claude-3-5-sonnet-20241022
-
-# 数据库（默认 SQLite，可省略）
-export DATABASE_URL=sqlite:///./stock_analyzer.db
-
-# JWT 密钥（必须配置，用于用户系统）
-export JWT_SECRET_KEY=你的随机密钥字符串
-```
-
-**方式二：.env 文件**
-```bash
-cp .env.example .env
-# 编辑 .env 填入 API Key 和 JWT 密钥
-```
-
-> 火山引擎 Coding Plan 开通：https://www.volcengine.com/product/ark
-
-> JWT 密钥可以用 `python -c "import secrets; print(secrets.token_hex(32))"` 生成
-
-启动服务：
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-后端启动后，访问 http://localhost:8000/docs 可以看到 Swagger API 文档。
-
-### 3. 启动前端
+前端：
 
 ```bash
 cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
 npm run dev
 ```
 
-前端启动后，访问 http://localhost:5173 即可使用。
+开发模式访问 http://localhost:5173。Vite 会把 `/api` 请求代理到 `http://localhost:52764`。日常启动建议使用 `./start.sh` 的同源模式。
 
 ## 使用说明
 
@@ -168,6 +187,7 @@ npm run dev
 | 行业板块 | GET | `/api/board/industry` | 行业板块列表 |
 | 概念板块 | GET | `/api/board/concept` | 概念板块列表 |
 | 市场概览 | GET | `/api/board/market/summary` | 指数+涨跌统计 |
+| 盘中监控总览 | GET | `/api/monitor/overview?group_id=all&days=90` | 需登录；市场环境、自选股快照、技术信号、行动队列；传 `code` 可单只重试 |
 
 ### 用户系统
 
@@ -213,6 +233,7 @@ npm run dev
 - AKShare 依赖第三方数据源，接口可能随时间变动，如遇数据获取失败请升级 AKShare 版本。
 - A股交易时间（9:30-11:30, 13:00-15:00）外，实时行情数据可能延迟。
 - 火山引擎豆包 API 需要付费使用，请关注调用量和费用。
+- 盘中监控采用定时刷新和缓存降级数据，不是逐笔实时行情；第一期不计算持仓数量、仓位和总资产。
 
 ## 常见问题
 

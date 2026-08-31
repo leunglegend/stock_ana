@@ -1,656 +1,284 @@
 <template>
-  <div class="watchlist-page">
-    <!-- 页面头部 -->
-    <div class="page-header">
+  <div class="watchlist-page workbench-page">
+    <header class="watchlist-page__header workbench-page__header">
       <div>
-        <h2 class="page-title">我的自选股</h2>
-        <p class="page-subtitle">共 {{ activeStocks.length }} 只股票 · {{ activeGroupName }}</p>
+        <h1 data-page-title class="watchlist-page__title">我的自选</h1>
+        <p class="watchlist-page__subtitle">{{ activeGroupName }} · {{ activeStocks.length }} 只<template v-if="errorCount"> · {{ errorCount }} 只行情待重试</template></p>
       </div>
-      <div class="header-actions">
-        <el-select v-model="activeGroup" @change="onGroupChange" style="width: 140px; margin-right: 12px;">
-          <el-option
-            v-for="group in groups"
-            :key="group.id"
-            :label="group.name"
-            :value="group.id"
-          />
-        </el-select>
-        <el-button type="primary" :icon="Plus" @click="showAddDialog = true">
-          添加股票
-        </el-button>
-        <el-dropdown @command="handleGroupCommand">
-          <el-button :icon="MoreFilled" />
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="add-group">新建分组</el-dropdown-item>
-              <el-dropdown-item command="rename-group" :disabled="groups.length <= 1">重命名分组</el-dropdown-item>
-              <el-dropdown-item command="delete-group" :disabled="groups.length <= 1">删除分组</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+      <div class="watchlist-page__header-actions">
+        <el-button :icon="Refresh" :loading="quotesLoading" aria-label="刷新当前分组行情" @click="refreshQuotes">刷新</el-button>
+        <el-button v-if="!cloudStateLocked" type="primary" @click="showAddDialog = true">添加股票</el-button>
       </div>
-    </div>
-
-    <!-- 盈亏总览卡片 -->
-    <el-card v-if="activeStocks.length > 0" class="summary-card card-shadow">
-      <el-row :gutter="24">
-        <el-col :span="6">
-          <div class="summary-item">
-            <div class="summary-label">总市值</div>
-            <div class="summary-value">¥{{ totalValue.toFixed(2) }}</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="summary-item">
-            <div class="summary-label">总成本</div>
-            <div class="summary-value">¥{{ totalCost.toFixed(2) }}</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="summary-item">
-            <div class="summary-label">总盈亏</div>
-            <div class="summary-value" :class="{ up: totalProfit > 0, down: totalProfit < 0 }">
-              {{ totalProfit > 0 ? '+' : '' }}¥{{ totalProfit.toFixed(2) }}
-            </div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="summary-item">
-            <div class="summary-label">收益率</div>
-            <div class="summary-value" :class="{ up: totalProfitRate > 0, down: totalProfitRate < 0 }">
-              {{ totalProfitRate > 0 ? '+' : '' }}{{ totalProfitRate.toFixed(2) }}%
-            </div>
-          </div>
-        </el-col>
-      </el-row>
-    </el-card>
-
-    <!-- 股票列表 -->
-    <el-card class="list-card card-shadow">
-      <el-table
-        :data="stockListData"
-        v-loading="loading"
-        style="width: 100%"
-        :row-class-name="tableRowClassName"
-      >
-        <el-table-column prop="name" label="股票名称" width="150">
-          <template #default="{ row }">
-            <div class="stock-name-cell">
-              <span class="star-btn" @click.stop="toggleWatch(row)">
-                <el-icon :size="16" color="#f59e0b"><StarFilled /></el-icon>
-              </span>
-              <span class="name">{{ row.name }}</span>
-              <span class="code">{{ row.code }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="price" label="最新价" width="120" align="right">
-          <template #default="{ row }">
-            <span class="price" :class="priceClass(row)">
-              {{ row.price ? row.price.toFixed(2) : '--' }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="change_pct" label="涨跌幅" width="120" align="right">
-          <template #default="{ row }">
-            <span :class="priceClass(row)">
-              {{ row.change_pct > 0 ? '+' : '' }}{{ row.change_pct?.toFixed(2) }}%
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="cost" label="成本价" width="120" align="right">
-          <template #default="{ row }">
-            <span v-if="row.cost">{{ row.cost.toFixed(2) }}</span>
-            <el-button v-else type="primary" link size="small" @click="editCost(row)">
-              设置成本
-            </el-button>
-          </template>
-        </el-table-column>
-        <el-table-column label="盈亏" width="140" align="right">
-          <template #default="{ row }">
-            <div v-if="row.cost && row.price">
-              <span :class="profitClass(row)">
-                {{ row.profit > 0 ? '+' : '' }}{{ row.profit?.toFixed(2) }}
-              </span>
-              <span class="profit-rate" :class="profitClass(row)">
-                ({{ row.profitRate > 0 ? '+' : '' }}{{ row.profitRate?.toFixed(2) }}%)
-              </span>
-            </div>
-            <span v-else class="text-muted">--</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="goToDetail(row)">
-              分析
-            </el-button>
-            <el-button type="primary" link size="small" @click="editCost(row)">
-              成本
-            </el-button>
-            <el-button type="danger" link size="small" @click="removeStock(row)">
-              移除
-            </el-button>
-          </template>
-        </el-table-column>
-
-        <template #empty>
-          <el-empty description="暂无自选股，点击「添加股票」开始关注">
-            <el-button type="primary" @click="showAddDialog = true">添加股票</el-button>
-          </el-empty>
-        </template>
-      </el-table>
-    </el-card>
-
-    <!-- 添加股票对话框 -->
-    <el-dialog v-model="showAddDialog" title="添加自选股" width="500px">
-      <el-form label-position="top">
-        <el-form-item label="搜索股票">
-          <StockSearch @select="onStockSelect" />
-        </el-form-item>
-        <!-- 选中股票信息卡片 -->
-        <div v-if="selectedStock" class="selected-stock-card card-shadow">
-          <div class="stock-main">
-            <div class="stock-name-row">
-              <span class="stock-name">{{ selectedStock.name }}</span>
-              <span class="stock-code">{{ selectedStock.code }}</span>
-              <el-tag
-                v-if="isWatched(selectedStock.code)"
-                type="success"
-                size="small"
-                effect="light"
-              >已关注</el-tag>
-            </div>
-            <div class="stock-price-row" v-loading="stockInfoLoading">
-              <template v-if="stockInfo">
-                <span class="price" :class="priceClass(stockInfo)">
-                  {{ stockInfo.price?.toFixed(2) || '--' }}
-                </span>
-                <span class="change" :class="priceClass(stockInfo)">
-                  {{ stockInfo.change_pct > 0 ? '+' : '' }}{{ stockInfo.change_pct?.toFixed(2) }}%
-                </span>
-              </template>
-              <template v-else>
-                <span class="price-placeholder">行情加载中...</span>
-              </template>
-            </div>
-          </div>
-          <div class="stock-stats" v-if="stockInfo">
-            <div class="stat-item">
-              <span class="stat-label">开盘</span>
-              <span class="stat-value">{{ stockInfo.open?.toFixed(2) || '--' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">最高</span>
-              <span class="stat-value up">{{ stockInfo.high?.toFixed(2) || '--' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">最低</span>
-              <span class="stat-value down">{{ stockInfo.low?.toFixed(2) || '--' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">昨收</span>
-              <span class="stat-value">{{ stockInfo.pre_close?.toFixed(2) || '--' }}</span>
-            </div>
+    </header>
+    <StatusState v-if="cloudError" state="error" title="云端自选股暂时不可用" :description="cloudError">
+      <template #action><el-button type="primary" @click="retryEnterCloudMode">重试连接云端</el-button></template>
+    </StatusState>
+    <StatusState
+      v-else-if="showCloudLoadingState"
+      state="loading"
+      title="正在连接云端自选股"
+      description="连接成功后会展示云端的最新自选股数据。"
+    />
+    <template v-else>
+      <section class="watchlist-page__toolbar" aria-label="自选研究工具">
+        <div class="watchlist-page__toolbar-top">
+          <GroupTabs :groups="groups" :active-id="activeGroupId" @change="store.setActiveGroup($event)"
+            @create="handleCreateGroup" @rename="handleRenameGroup" @remove="handleRemoveGroup" />
+        </div>
+        <WatchlistFilters v-model:keyword="keyword" v-model:movement="movementFilter" v-model:sort-by="sortBy"
+          v-model:only-cost="onlyCost" :total="filteredRows.length" :updated-at="lastUpdatedAt"
+          :loading="quotesLoading" @clear="clearFilters" />
+      </section>
+      <StatusState v-if="activeStocks.length === 0" state="empty" title="当前分组还没有股票" description="添加股票后，这里会按真实接口逐行补齐行情。">
+        <template #action><el-button type="primary" @click="showAddDialog = true">添加股票</el-button></template>
+      </StatusState>
+      <StatusState v-else-if="filteredRows.length === 0" state="empty" title="没有匹配结果" description="请调整筛选条件，或清空筛选后重试。">
+        <template #action><el-button type="primary" plain @click="clearFilters">清空筛选</el-button></template>
+      </StatusState>
+      <section v-else class="watchlist-page__workspace">
+        <div class="watchlist-page__queue">
+          <WatchlistMobileList v-if="isMobile" :rows="paginatedRows" @open="openDetail" @edit="openEditDialog"
+            @remove="handleRemoveStock" @retry="retryQuote" />
+          <WatchlistTable v-else :rows="paginatedRows" :loading="quotesLoading" :signals="signalResults"
+            @open="openDetail" @edit="openEditDialog" @remove="handleRemoveStock" @retry="retryQuote" />
+          <div v-if="filteredRows.length > pageSize" class="watchlist-page__pagination-row">
+            <span class="watchlist-page__range">第 {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredRows.length) }} 项，共 {{ filteredRows.length }} 项</span>
+            <el-pagination class="watchlist-page__pagination" background :small="!isMobile" :layout="paginationLayout"
+              :total="filteredRows.length" :page-size="pageSize" :current-page="currentPage"
+              @current-change="currentPage = $event" />
+            <span v-if="isMobile" class="watchlist-page__page-status" aria-live="polite">第 {{ currentPage }} / {{ pageCount }} 页</span>
           </div>
         </div>
+        <aside class="watchlist-page__inspector">
+          <WatchlistSignalCenter :results="signalResults" :summary="signalSummary" :scanning="signalsScanning"
+            :completed="signalsCompleted" :progress="signalProgress" :stock-count="activeStocks.length"
+            :last-scanned-at="lastSignalScanAt" :quote-rows="quoteRows" @scan="scanSignals" />
+        </aside>
+      </section>
 
-        <el-form-item v-if="selectedStock" label="成本价（可选）" class="cost-form-item">
-          <el-input-number
-            ref="costInputRef"
-            v-model="costPrice"
-            :precision="2"
-            :step="0.01"
-            :min="0"
-            placeholder="输入成本价，默认为 0"
-            style="width: 100%"
-          />
-          <div class="cost-tip">
-            设置成本价后可自动计算盈亏，也可以之后再设置
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" :disabled="!selectedStock || isWatched(selectedStock?.code)" @click="confirmAdd">
-          添加
-        </el-button>
-      </template>
-    </el-dialog>
+      <WatchlistAddDialog
+        v-model:visible="showAddDialog"
+        :groups="groups"
+        :default-group-id="activeGroupId"
+        :submitting="adding"
+        @submit="handleAddStock"
+      />
 
-    <!-- 设置成本对话框 -->
-    <el-dialog v-model="showCostDialog" title="设置成本价" width="400px">
-      <el-form label-position="top">
-        <el-form-item label="股票">
-          <span>{{ currentStock?.name }}（{{ currentStock?.code }}）</span>
-        </el-form-item>
-        <el-form-item label="成本价">
-          <el-input-number
-            v-model="costPrice"
-            :precision="2"
-            :step="0.01"
-            :min="0"
-            placeholder="输入成本价"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCostDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmCost">确定</el-button>
-      </template>
-    </el-dialog>
+      <WatchlistEditDialog
+        v-model:visible="showEditDialog"
+        :row="editingRow"
+        :submitting="editing"
+        @submit="handleEditStock"
+        @update:visible="handleEditDialogVisible"
+      />
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Plus, MoreFilled, StarFilled,
-} from '@element-plus/icons-vue'
-import { useWatchlistStore } from '../store'
-import StockSearch from '../components/StockSearch.vue'
-import { getStockInfo } from '../api/stock'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
+import { Refresh } from '@element-plus/icons-vue'
+import StatusState from '@/components/base/StatusState.vue'
+import GroupTabs from '@/components/watchlist/GroupTabs.vue'
+import WatchlistAddDialog from '@/components/watchlist/WatchlistAddDialog.vue'
+import WatchlistEditDialog from '@/components/watchlist/WatchlistEditDialog.vue'
+import WatchlistFilters from '@/components/watchlist/WatchlistFilters.vue'
+import WatchlistMobileList from '@/components/watchlist/WatchlistMobileList.vue'
+import WatchlistSignalCenter from '@/components/watchlist/WatchlistSignalCenter.vue'
+import WatchlistTable from '@/components/watchlist/WatchlistTable.vue'
+import { useWatchlistRows } from '@/components/watchlist/useWatchlistRows'
+import { useWatchlistSignals } from '@/components/watchlist/useWatchlistSignals'
+import { useResponsive } from '@/composables/useResponsive'
+import { useWatchlistStore } from '@/store'
 
 const router = useRouter()
 const store = useWatchlistStore()
+const { isMobile } = useResponsive()
 
-const loading = ref(false)
 const showAddDialog = ref(false)
-const showCostDialog = ref(false)
-const selectedStock = ref(null)
-const stockInfo = ref(null)
-const stockInfoLoading = ref(false)
-const currentStock = ref(null)
-const costPrice = ref(0)
-const stockListData = ref([])
-const costInputRef = ref(null)
+const showEditDialog = ref(false)
+const adding = ref(false)
+const editing = ref(false)
+const editingRow = ref(null)
+const currentPage = ref(1)
+const pageSize = 10
+const paginationLayout = computed(() => isMobile.value ? 'prev, next' : 'total, prev, pager, next')
 
-const activeGroup = computed({
-  get: () => store.activeGroup,
-  set: (val) => store.setActiveGroup(val),
+const groups = computed(() => store.groups)
+const activeGroupId = computed(() => store.activeGroup)
+const activeGroup = computed(() => groups.value.find((group) => group.id === activeGroupId.value) || groups.value[0] || null)
+const activeGroupName = computed(() => activeGroup.value?.name || '我的自选')
+const activeStocks = computed(() => activeGroup.value?.stocks || [])
+const cloudError = computed(() => store.cloudError)
+const showCloudLoadingState = computed(() => store.cloudMode && store.loading && !cloudError.value && activeStocks.value.length === 0)
+const cloudStateLocked = computed(() => Boolean(cloudError.value) || showCloudLoadingState.value)
+
+const {
+  quoteRows,
+  keyword,
+  movementFilter,
+  sortBy,
+  onlyCost,
+  filteredRows,
+  quotesLoading,
+  errorCount,
+  lastUpdatedAt,
+  retryQuote,
+  refreshQuotes,
+  patchRow,
+  clearFilters,
+} = useWatchlistRows(activeGroupId, activeStocks)
+
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredRows.value.slice(start, start + pageSize)
+})
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)))
+
+watch([activeGroupId, keyword, movementFilter, sortBy, onlyCost], () => {
+  currentPage.value = 1
 })
 
-const groups = computed(() => store.groupNames)
-const activeStocks = computed(() => store.activeStocks)
-
-const activeGroupName = computed(() => {
-  const g = groups.value.find(g => g.id === activeGroup.value)
-  return g ? g.name : ''
+watch(() => filteredRows.value.length, (count) => {
+  const lastPage = Math.max(1, Math.ceil(count / pageSize))
+  if (currentPage.value > lastPage) currentPage.value = lastPage
 })
 
-// 计算持仓盈亏
-const totalCost = computed(() => {
-  return stockListData.value.reduce((sum, s) => {
-    return sum + (s.cost && s.shares ? s.cost * s.shares : 0)
-  }, 0)
-})
+const {
+  results: signalResults,
+  scanning: signalsScanning,
+  completed: signalsCompleted,
+  lastScannedAt: lastSignalScanAt,
+  summary: signalSummary,
+  progress: signalProgress,
+  scan: scanSignals,
+} = useWatchlistSignals(activeGroupId, activeStocks, quoteRows)
 
-const totalValue = computed(() => {
-  return stockListData.value.reduce((sum, s) => {
-    return sum + (s.price && s.shares ? s.price * s.shares : 0)
-  }, 0)
-})
-
-const totalProfit = computed(() => totalValue.value - totalCost.value)
-const totalProfitRate = computed(() => {
-  if (totalCost.value === 0) return 0
-  return (totalProfit.value / totalCost.value) * 100
-})
-
-function priceClass(row) {
-  if (!row.change_pct) return ''
-  return row.change_pct > 0 ? 'up' : row.change_pct < 0 ? 'down' : ''
+async function retryEnterCloudMode() {
+  if (store.loading) return
+  await store._enterCloudMode()
 }
 
-function profitClass(row) {
-  if (!row.profit) return ''
-  return row.profit > 0 ? 'up' : (row.profit < 0 ? 'down' : '')
-}
-
-function tableRowClassName({ row }) {
-  return profitClass(row) ? `row-${profitClass(row)}` : ''
-}
-
-// 加载股票实时行情
-async function loadStockPrices() {
-  if (activeStocks.value.length === 0) {
-    stockListData.value = []
-    return
-  }
-
-  loading.value = true
+async function handleCreateGroup() {
   try {
-    // 逐个获取行情（避免并发太高）
-    const results = []
-    for (const stock of activeStocks.value) {
-      try {
-        const info = await getStockInfo(stock.code)
-        results.push({
-          ...stock,
-          price: info.price,
-          change_pct: info.change_pct,
-          change_amount: info.change_amount,
-          profit: stock.cost ? info.price - stock.cost : 0,
-          profitRate: stock.cost ? ((info.price - stock.cost) / stock.cost) * 100 : 0,
-          shares: 100, // 默认100股，后续可改
-        })
-      } catch (e) {
-        results.push({ ...stock, price: 0, change_pct: 0, profit: 0, profitRate: 0, shares: 100 })
-      }
-    }
-    stockListData.value = results
-  } catch (e) {
-    ElMessage.error('加载行情失败')
-  } finally {
-    loading.value = false
-  }
+    const { value } = await ElMessageBox.prompt('请输入分组名称', '新建分组', { inputPattern: /\S+/, inputErrorMessage: '分组名称不能为空' })
+    const name = value.trim()
+    const nextId = await store.addGroup(name)
+    if (!nextId) return
+    store.setActiveGroup(String(nextId))
+    ElMessage.success(`已创建分组「${name}」`)
+  } catch {}
 }
 
-async function onStockSelect(stock) {
-  selectedStock.value = stock
-  stockInfo.value = null
-  costPrice.value = 0
-
-  // 加载实时行情
-  stockInfoLoading.value = true
+async function handleRenameGroup(groupId) {
+  const group = groups.value.find((item) => item.id === groupId)
+  if (!group) return
   try {
-    const info = await getStockInfo(stock.code)
-    stockInfo.value = info
-  } catch (e) {
-    console.error('加载股票行情失败:', e)
-  } finally {
-    stockInfoLoading.value = false
-  }
-
-  // 自动聚焦到成本价输入框
-  nextTick(() => {
-    costInputRef.value?.focus?.()
-  })
-}
-
-function isWatched(code) {
-  return store.isWatched(code)
-}
-
-async function confirmAdd() {
-  if (!selectedStock.value) return
-  const success = await store.addStock({
-    code: selectedStock.value.code,
-    name: selectedStock.value.name,
-    cost: costPrice.value || 0,
-  })
-  if (success) {
-    ElMessage.success('添加成功')
-    showAddDialog.value = false
-    selectedStock.value = null
-    loadStockPrices()
-  } else {
-    ElMessage.warning('该股票已在自选列表中')
-  }
-}
-
-async function toggleWatch(row) {
-  await store.removeStock(row.code)
-  loadStockPrices()
-  ElMessage.success('已移除自选')
-}
-
-function removeStock(row) {
-  ElMessageBox.confirm(`确定要移除「${row.name}」吗？`, '提示', {
-    type: 'warning',
-  }).then(async () => {
-    await store.removeStock(row.code)
-    loadStockPrices()
-    ElMessage.success('移除成功')
-  }).catch(() => {})
-}
-
-function editCost(row) {
-  currentStock.value = row
-  costPrice.value = row.cost || 0
-  showCostDialog.value = true
-}
-
-async function confirmCost() {
-  if (!currentStock.value) return
-  await store.updateCost(currentStock.value.code, costPrice.value)
-  loadStockPrices()
-  showCostDialog.value = false
-  ElMessage.success('成本价已更新')
-}
-
-function goToDetail(row) {
-  router.push(`/stock/${row.code}`)
-}
-
-function onGroupChange() {
-  loadStockPrices()
-}
-
-function handleGroupCommand(cmd) {
-  if (cmd === 'add-group') {
-    ElMessageBox.prompt('请输入分组名称', '新建分组', {
+    const { value } = await ElMessageBox.prompt('请输入新的分组名称', '重命名分组', {
+      inputValue: group.name,
       inputPattern: /\S+/,
       inputErrorMessage: '分组名称不能为空',
-    }).then(async ({ value }) => {
-      const id = await store.addGroup(value)
-      if (id) {
-        ElMessage.success('创建成功')
-      }
-    }).catch(() => {})
-  } else if (cmd === 'delete-group') {
-    ElMessageBox.confirm(`确定删除「${activeGroupName.value}」分组吗？`, '提示', {
-      type: 'warning',
-    }).then(async () => {
-      const ok = await store.removeGroup(activeGroup.value)
-      if (ok) {
-        loadStockPrices()
-        ElMessage.success('删除成功')
-      }
-    }).catch(() => {})
-  } else if (cmd === 'rename-group') {
-    // 预留
-    ElMessage.info('暂未开放，敬请期待')
+    })
+    if (await store.renameGroup(groupId, value.trim())) ElMessage.success('分组已重命名')
+  } catch {}
+}
+
+async function handleRemoveGroup(groupId) {
+  const group = groups.value.find((item) => item.id === groupId)
+  if (!group || groups.value.length <= 1) return
+  try {
+    await ElMessageBox.confirm(`确定删除分组「${group.name}」吗？其中股票会一并移出当前分组。`, '删除分组', { type: 'warning' })
+    if (await store.removeGroup(groupId)) ElMessage.success('分组已删除')
+  } catch {}
+}
+
+async function handleAddStock(payload) {
+  if (adding.value) return
+  adding.value = true
+  try {
+    const result = await store.addStockToGroup(payload.groupId, {
+      code: payload.stock.code,
+      name: payload.stock.name,
+      cost: payload.cost,
+      remark: payload.remark,
+    })
+    if (result.success) {
+      ElMessage.success(`已将「${payload.stock.name}」加入「${result.groupName}」`)
+      showAddDialog.value = false
+      return
+    }
+    if (result.reason === 'duplicate') return void ElMessage.warning(`「${payload.stock.name}」已在「${result.groupName}」中`)
+    ElMessage.error('加入自选失败')
+  } finally {
+    adding.value = false
   }
 }
 
-watch(() => store.activeGroup, () => {
-  loadStockPrices()
-})
+function openEditDialog(row) {
+  editingRow.value = { ...row }
+  showEditDialog.value = true
+}
 
-// 对话框关闭时清空选中状态
-watch(showAddDialog, (val) => {
-  if (!val) {
-    selectedStock.value = null
-    stockInfo.value = null
-    costPrice.value = 0
+function handleEditDialogVisible(visible) {
+  showEditDialog.value = visible
+  if (!visible) editingRow.value = null
+}
+
+async function handleEditStock(payload) {
+  if (!editingRow.value || editing.value) return
+  editing.value = true
+  try {
+    const result = await store.updateStock(payload.code, { cost: payload.cost, remark: payload.remark }, activeGroupId.value)
+    if (!result?.success) return
+    patchRow(payload.code, { cost: payload.cost, remark: payload.remark })
+    ElMessage.success('已更新成本与备注')
+    handleEditDialogVisible(false)
+  } finally {
+    editing.value = false
   }
-})
+}
 
-onMounted(() => {
-  loadStockPrices()
-})
+async function handleRemoveStock(row) {
+  try {
+    await ElMessageBox.confirm(`确定移除「${row.name} (${row.code})」吗？`, '移除股票', { type: 'warning' })
+    await store.removeStock(row.code, activeGroupId.value)
+    if (!activeStocks.value.some((item) => item.code === row.code)) ElMessage.success('已移除自选')
+  } catch {}
+}
+
+function openDetail(code) {
+  router.push(`/stock/${code}`)
+}
 </script>
 
 <style scoped>
-.watchlist-page {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 20px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 4px 0;
-}
-.page-subtitle {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0;
-}
-.header-actions {
-  display: flex;
-  align-items: center;
-}
-
-/* 盈亏总览 */
-.summary-card {
-  margin-bottom: 20px;
-  border-radius: 12px;
-}
-.summary-item {
-  text-align: center;
-  padding: 8px 0;
-}
-.summary-label {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
-}
-.summary-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1f2937;
-}
-.summary-value.up { color: #ef4444; }
-.summary-value.down { color: #10b981; }
-
-/* 股票列表 */
-.list-card {
-  border-radius: 12px;
-}
-
-.stock-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.star-btn {
-  cursor: pointer;
-  line-height: 1;
-}
-.stock-name-cell .name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
-}
-.stock-name-cell .code {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-left: 4px;
-}
-
-.price {
-  font-size: 15px;
-  font-weight: 600;
-}
-.price.up, .up { color: #ef4444; }
-.price.down, .down { color: #10b981; }
-
-.profit-rate {
-  margin-left: 4px;
-  font-size: 12px;
-}
-
-.text-muted {
-  color: #9ca3af;
-}
-
-/* 选中股票信息卡片 */
-.selected-stock-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-bottom: 18px;
-}
-.selected-stock-card .stock-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-}
-.selected-stock-card .stock-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.selected-stock-card .stock-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1f2937;
-}
-.selected-stock-card .stock-code {
-  font-size: 13px;
-  color: #9ca3af;
-  font-family: ui-monospace, monospace;
-}
-.selected-stock-card .stock-price-row {
-  text-align: right;
-  min-width: 140px;
-}
-.selected-stock-card .price {
-  font-size: 24px;
-  font-weight: 700;
-  margin-right: 8px;
-}
-.selected-stock-card .change {
-  font-size: 14px;
-  font-weight: 600;
-}
-.selected-stock-card .price-placeholder {
-  font-size: 14px;
-  color: #9ca3af;
-}
-.selected-stock-card .stock-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px dashed #e5e7eb;
-}
-.selected-stock-card .stat-item {
-  text-align: center;
-}
-.selected-stock-card .stat-label {
-  display: block;
-  font-size: 12px;
-  color: #9ca3af;
-  margin-bottom: 4px;
-}
-.selected-stock-card .stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-}
-.selected-stock-card .stat-value.up { color: #ef4444; }
-.selected-stock-card .stat-value.down { color: #10b981; }
-
-/* 成本价输入 */
-.cost-form-item {
-  margin-bottom: 0;
-}
-.cost-tip {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-top: 6px;
-}
-
-/* 行背景色（涨跌颜色淡背景） */
-:deep(.el-table__row.row-up) {
-  background-color: rgba(239, 68, 68, 0.03);
-}
-:deep(.el-table__row.row-down) {
-  background-color: rgba(16, 185, 129, 0.03);
+.watchlist-page { gap: var(--spacing-3); }
+.watchlist-page__title { margin: 0; color: var(--text-primary); font-size: var(--font-size-2xl); }
+.watchlist-page__subtitle { margin: 4px 0 0; color: var(--text-secondary); line-height: 1.4; }
+.watchlist-page__header-actions { display: flex; align-items: center; gap: var(--spacing-2); }
+.watchlist-page__toolbar { display: grid; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-panel); }
+.watchlist-page__toolbar-top { display: flex; align-items: center; min-width: 0; }
+.watchlist-page__workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-width: 0; border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-panel); overflow: hidden; }
+.watchlist-page__queue { min-width: 0; }
+.watchlist-page__inspector { min-width: 0; border-left: 1px solid var(--border-default); }
+.watchlist-page__pagination-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-3); min-height: 40px; padding: 0 var(--spacing-3); border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: var(--font-size-xs); }
+@media (max-width: 767px) {
+  .watchlist-page__header { align-items: stretch; }
+  .watchlist-page__header-actions { width: 100%; }
+  .watchlist-page__header-actions :deep(.el-button) { flex: 1; min-height: 44px; }
+  .watchlist-page__toolbar { padding: var(--spacing-3); }
+  .watchlist-page__workspace { grid-template-columns: minmax(0, 1fr); }
+  .watchlist-page__inspector { border-top: 1px solid var(--border-default); border-left: 0; }
+  .watchlist-page__pagination-row { justify-content: center; }
+  .watchlist-page__range { display: none; }
+  .watchlist-page__page-status { color: var(--text-secondary); font-size: var(--font-size-sm); white-space: nowrap; }
+  .watchlist-page__pagination :deep(.btn-prev),
+  .watchlist-page__pagination :deep(.btn-next) {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 </style>

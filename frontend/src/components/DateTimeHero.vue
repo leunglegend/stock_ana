@@ -85,7 +85,7 @@ onUnmounted(() => {
   text-align: center;
   padding: 36px 20px 28px;
   margin-bottom: 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary-600);
   border-radius: 16px;
   color: #fff;
   position: relative;
@@ -100,7 +100,7 @@ onUnmounted(() => {
   right: -20%;
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  background: rgba(255,255,255,0.12);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -112,7 +112,7 @@ onUnmounted(() => {
   left: -10%;
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  background: rgba(255,255,255,0.08);
   border-radius: 50%;
   pointer-events: none;
 }

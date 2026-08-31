@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -14,12 +14,51 @@ from app.services import watchlist_service
 
 logger = logging.getLogger(__name__)
 
+AI_ERROR_MARKERS = (
+    "AI 服务暂不可用",
+    "AI 分析服务暂不可用",
+    "AI 分析出错",
+    "AI 盘后分析出错",
+    "AI 日报总览出错",
+    "AuthenticationError",
+    "unexpected keyword argument",
+)
+REPORT_STATUSES = frozenset({"all", "completed", "generating", "failed", "pending"})
+REPORT_DAYS = frozenset({"7", "30", "90", "all"})
+
+
+def is_report_usable(report: DailyReport) -> bool:
+    """只有包含真实 AI 内容的完成态报告才可复用。"""
+    if report.status != "completed" or report.error_msg or not report.market_summary.strip():
+        return False
+    stock_reports = list(report.stock_reports or [])
+    if not stock_reports:
+        return False
+    content = [report.market_summary]
+    content.extend(item.analysis_text or "" for item in stock_reports)
+    content.extend(item.summary or "" for item in stock_reports)
+    return not any(marker in text for marker in AI_ERROR_MARKERS for text in content)
+
 
 def get_reports(
-    db: Session, user_id: int, page: int = 1, page_size: int = 20
+    db: Session,
+    user_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    status: str = "all",
+    days: str = "all",
 ) -> Tuple[List[DailyReport], int]:
-    """分页获取用户的复盘报告列表。"""
+    """按状态和日期范围筛选后分页获取用户复盘报告。"""
+    if status not in REPORT_STATUSES or days not in REPORT_DAYS:
+        raise ValueError("invalid report filters")
+
     query = db.query(DailyReport).filter(DailyReport.user_id == user_id)
+    if status != "all":
+        query = query.filter(DailyReport.status == status)
+    if days != "all":
+        start_date = date.today() - timedelta(days=int(days) - 1)
+        query = query.filter(DailyReport.report_date >= start_date)
+
     total = query.count()
     items = (
         query.order_by(DailyReport.report_date.desc())
@@ -186,8 +225,8 @@ def generate_daily_report_for_user(
         report.status = "generating"
         report.error_msg = ""
         db.commit()
-    elif existing and existing.status == "completed":
-        # 已完成，不再重新生成
+    elif existing and is_report_usable(existing):
+        # 已完成且内容有效，不再重新生成
         return existing
     else:
         # 不存在或失败，创建新的

@@ -17,7 +17,7 @@ class Settings:
 
     # 服务配置
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    PORT: int = int(os.getenv("PORT", "52764"))
 
     # CORS 允许的前端地址
     CORS_ORIGINS: list = [

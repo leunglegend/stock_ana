@@ -13,7 +13,7 @@ stock-analyzer/
 │   │   ├── api/stock.js  # API 封装（axios + EventSource）
 │   │   ├── store/index.js # Pinia 自选股状态（localStorage 持久化）
 │   │   └── router/index.js
-│   └── vite.config.js  # /api 代理到 localhost:8000
+│   └── vite.config.js  # /api 代理到 localhost:52764
 └── backend/           # Python FastAPI 后端
     ├── app/
     │   ├── main.py         # 入口 + 启动预加载
@@ -42,14 +42,15 @@ stock-analyzer/
 - 后端 Python 文件都有 docstring 模块说明
 - 板块数据和市场数据用**多数据源 fallback** 策略：东财 → 同花顺 → 旧缓存
 - 缓存首次请求同步加载，之后后台异步刷新（详见 `data_cache.py`）
-- 前端用 Vite 代理 `/api` 到后端 8000 端口
+- 同源启动时前端页面与 `/api` 均由后端 52764 端口提供
+- 前端开发时 Vite 使用 5173 端口，并代理 `/api` 到后端 52764 端口
 
 ## 常用命令
 
 ```bash
 # 后端
 cd backend && source venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 52764
 
 # 前端
 cd frontend && npm run dev   # http://localhost:5173

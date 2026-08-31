@@ -4,6 +4,7 @@
 """
 
 from datetime import date
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -24,11 +25,15 @@ router = APIRouter(prefix="/api/reports", tags=["复盘报告"])
 def list_reports(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    status: Literal["all", "completed", "generating", "failed", "pending"] = "all",
+    days: Literal["7", "30", "90", "all"] = "all",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """分页获取当前用户的复盘报告列表。"""
-    items, total = report_service.get_reports(db, current_user.id, page, page_size)
+    items, total = report_service.get_reports(
+        db, current_user.id, page, page_size, status, days
+    )
     return PaginatedDailyReports(
         items=[DailyReportListItem.model_validate(item) for item in items],
         total=total,
@@ -79,7 +84,7 @@ def generate_today(
     today = date.today()
     # 检查是否已有 completed 的报告
     existing = report_service.get_report_by_date(db, current_user.id, today)
-    if existing and existing.status == "completed":
+    if existing and report_service.is_report_usable(existing):
         return {"success": True, "report_id": existing.id, "message": "今日报告已存在"}
     if existing and existing.status == "generating":
         return {"success": True, "report_id": existing.id, "message": "正在生成中..."}

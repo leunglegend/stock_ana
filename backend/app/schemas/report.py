@@ -50,6 +50,7 @@ class DailyReportListItem(BaseModel):
     status: str
     stock_count: int
     market_summary: str  # 截断版或完整版
+    risk_notes: str = ""
     created_at: datetime
     completed_at: Optional[datetime] = None
 

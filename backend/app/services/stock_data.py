@@ -3,12 +3,19 @@
 """
 from typing import List, Optional
 import datetime
+from math import isfinite
 import re
 import time
 import functools
 
 from app.models.schemas import (
     StockInfo, KLineData, KLineItem, FinancialData, StockSearchItem
+)
+from app.schemas.monitor import (
+    MonitorIndicators,
+    MonitorMetrics,
+    MonitorQuote,
+    MonitorSnapshot,
 )
 
 # 延迟导入 AKShare（安装较重，未安装时也能启动应用）
@@ -368,6 +375,68 @@ def get_kline_data(code: str, period: str = "daily", days: int = 250) -> Optiona
     except Exception as e:
         print(f"获取股票 {code} K线数据失败: {e}")
         return None
+
+
+def get_monitor_snapshot(code: str, days: int = 90) -> MonitorSnapshot:
+    """单次读取日 K，构造盘中监控所需的行情、指标和收益快照。"""
+    data = get_kline_data(code, period="daily", days=days)
+    if not data or len(data.kline) < 2:
+        raise RuntimeError(f"股票 {code} 有效 K 线数据不足")
+
+    rows = [row for row in data.kline if isfinite(row.close) and row.close > 0]
+    if len(rows) < 2:
+        raise RuntimeError(f"股票 {code} 有效 K 线数据不足")
+    latest = rows[-1]
+    previous = rows[-2]
+    previous_close = previous.close
+    change_amount = latest.close - previous_close
+    change_pct = change_amount / previous_close * 100 if previous_close else None
+    prior_highs = [row.high for row in rows[-21:-1] if isfinite(row.high) and row.high > 0]
+    high20_distance_pct = None
+    if prior_highs and max(prior_highs) > 0:
+        high20_distance_pct = (latest.close / max(prior_highs) - 1) * 100
+
+    def period_return(period: int) -> float | None:
+        if len(rows) <= period or not isfinite(rows[-period - 1].close) or rows[-period - 1].close == 0:
+            return None
+        return (latest.close / rows[-period - 1].close - 1) * 100
+
+    return MonitorSnapshot(
+        code=data.code,
+        name=data.name,
+        rows=rows,
+        kline=rows,
+        quote=MonitorQuote(
+            price=latest.close,
+            change_pct=round(change_pct, 2) if change_pct is not None else None,
+            change_amount=round(change_amount, 2),
+            volume=latest.volume,
+            source="kline",
+            as_of=latest.date,
+        ),
+        indicators=MonitorIndicators(
+            ma5=latest.ma5,
+            ma10=latest.ma10,
+            ma20=latest.ma20,
+            dif=latest.dif,
+            dea=latest.dea,
+            macd=latest.macd,
+            rsi6=latest.rsi6,
+            rsi12=latest.rsi12,
+            rsi24=latest.rsi24,
+            high20_distance_pct=round(high20_distance_pct, 2) if high20_distance_pct is not None else None,
+        ),
+        metrics=MonitorMetrics(
+            return_5d_pct=_rounded_or_none(period_return(5)),
+            return_20d_pct=_rounded_or_none(period_return(20)),
+        ),
+        sparkline=[{"date": row.date, "close": row.close} for row in rows[-30:]],
+        fetched_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+def _rounded_or_none(value: float | None, digits: int = 2) -> float | None:
+    return round(value, digits) if value is not None else None
 
 
 def _parse_value_with_unit(val_str) -> Optional[float]:

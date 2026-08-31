@@ -2,6 +2,11 @@
  * 路由配置
  */
 import { createRouter, createWebHistory } from 'vue-router'
+import { reportApi } from '@/api/report'
+import { useUserStore } from '@/store/user'
+
+const LOGIN_REQUIRED_EVENT = 'show-login'
+const APP_TITLE_SUFFIX = ' - 智能股票分析平台'
 
 const routes = [
   {
@@ -11,16 +16,28 @@ const routes = [
     meta: { title: '首页', icon: 'Odometer' },
   },
   {
+    path: '/monitor',
+    name: 'Monitor',
+    component: () => import('../views/Monitor.vue'),
+    meta: { title: '盘中监控', icon: 'Monitor', requiresAuth: true },
+  },
+  {
     path: '/watchlist',
     name: 'Watchlist',
     component: () => import('../views/Watchlist.vue'),
-    meta: { title: '自选股', icon: 'Star' },
+    meta: { title: '自选股', icon: 'Star', requiresAuth: true },
   },
   {
     path: '/board',
     name: 'Board',
     component: () => import('../views/BoardMonitor.vue'),
-    meta: { title: '板块监控', icon: 'TrendCharts' },
+    meta: { title: '板块监控', icon: 'DataAnalysis' },
+  },
+  {
+    path: '/radar',
+    name: 'Radar',
+    component: () => import('../views/OpportunityRadar.vue'),
+    meta: { title: '机会雷达', icon: 'TrendCharts' },
   },
   {
     path: '/search',
@@ -41,6 +58,22 @@ const routes = [
     meta: { title: '复盘报告', icon: 'Document', requiresAuth: true },
   },
   {
+    path: '/reports/latest',
+    name: 'LatestReport',
+    beforeEnter: async () => {
+      try {
+        const data = await reportApi.getList({ page: 1, page_size: 20 })
+        const latestReport = (data.items || []).find((item) => item.status === 'completed')
+        if (!latestReport) return { path: '/reports' }
+
+        return { name: 'ReportDetail', params: { id: latestReport.id } }
+      } catch {
+        return { path: '/reports' }
+      }
+    },
+    meta: { title: '报告详情', hidden: true, requiresAuth: true },
+  },
+  {
     path: '/reports/:id',
     name: 'ReportDetail',
     component: () => import('../views/ReportDetail.vue'),
@@ -53,23 +86,69 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
-  document.title = `${to.meta.title || '股票分析'} - 智能股票分析平台`
-  next()
-})
+function isProtectedRoute(route) {
+  return route.matched.some((record) => record.meta.requiresAuth)
+}
 
-// 需要登录的路由（未登录弹出登录框，停留在当前页面）
-router.beforeEach(async (to, from, next) => {
-  if (to.meta.requiresAuth || to.path === '/watchlist') {
-    const mod = await import('../store/user')
-    const userStore = mod.useUserStore()
-    if (!userStore.isLoggedIn) {
-      window.dispatchEvent(new CustomEvent('show-login'))
-      next(false)
-      return
+function resolveFallbackRoute(from) {
+  const canStayOnFromRoute = from.matched.length > 0 && !isProtectedRoute(from)
+
+  if (!canStayOnFromRoute) {
+    return { path: '/', replace: true }
+  }
+
+  if (from.name) {
+    return {
+      name: from.name,
+      params: from.params,
+      query: from.query,
+      hash: from.hash,
+      replace: true,
     }
   }
-  next()
+
+  return {
+    path: from.path,
+    query: from.query,
+    hash: from.hash,
+    replace: true,
+  }
+}
+
+function updateDocumentTitle(route) {
+  document.title = `${route.meta.title || '股票分析'}${APP_TITLE_SUFFIX}`
+}
+
+// 需要登录的路由（未登录弹出登录框，停留在当前页面）
+router.beforeEach(async (to, from) => {
+  if (!isProtectedRoute(to)) {
+    return true
+  }
+
+  const userStore = useUserStore()
+  await userStore.initializeAuth()
+
+  if (!userStore.isLoggedIn) {
+    userStore.setPendingRoute(to.fullPath)
+    window.dispatchEvent(new CustomEvent(LOGIN_REQUIRED_EVENT, {
+      detail: { targetPath: to.fullPath },
+    }))
+    return resolveFallbackRoute(from)
+  }
+
+  return true
+})
+
+router.afterEach((to, _from, failure) => {
+  if (failure) return
+
+  updateDocumentTitle(to)
+  window.requestAnimationFrame(() => {
+    const title = document.querySelector('[data-page-title]')
+    if (!(title instanceof HTMLElement)) return
+    title.tabIndex = -1
+    title.focus()
+  })
 })
 
 export default router

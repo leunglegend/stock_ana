@@ -1,0 +1,162 @@
+/* Element Plus 统一适配：紧凑桌面数据区，移动端保持可触达。 */
+
+.el-button {
+  --el-button-size: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0;
+}
+
+.el-button + .el-button {
+  margin-left: var(--spacing-2);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-input-number {
+  min-height: var(--control-height);
+  border-radius: var(--radius-control);
+  box-shadow: 0 0 0 1px var(--border-default) inset;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--border-strong) inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--focus-ring) inset;
+}
+
+.el-segmented {
+  min-height: var(--control-height);
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--surface-panel-muted);
+}
+
+.el-segmented__item,
+.el-segmented__item-selected {
+  border-radius: var(--radius-xs);
+}
+
+.el-switch {
+  min-height: var(--control-height);
+  --el-switch-on-color: var(--color-primary-600);
+  --el-switch-off-color: var(--border-strong);
+}
+
+.el-card {
+  border: 1px solid var(--border-default);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.el-card__header {
+  padding: var(--spacing-2) var(--spacing-3);
+  border-bottom-color: var(--border-subtle);
+}
+
+.el-card__body {
+  padding: var(--spacing-3);
+}
+
+.el-table {
+  --el-table-border-color: var(--border-subtle);
+  --el-table-header-bg-color: var(--surface-panel-muted);
+  --el-table-row-hover-bg-color: var(--state-hover);
+  --el-table-current-row-bg-color: var(--state-selected);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border-default);
+}
+
+.el-table::before,
+.el-table__inner-wrapper::before {
+  background-color: var(--border-default);
+}
+
+.el-table .el-table__cell {
+  height: var(--data-row-height);
+  padding: 0;
+}
+
+.el-table th.el-table__cell {
+  height: var(--table-head-height);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.el-table .cell {
+  padding-inline: var(--spacing-3);
+  line-height: 18px;
+}
+
+.el-tabs__header {
+  margin: 0;
+}
+
+.el-tabs__item {
+  height: var(--toolbar-height);
+  padding-inline: var(--spacing-3);
+  font-size: var(--font-size-sm);
+}
+
+.el-tabs__nav-wrap::after {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.el-pagination {
+  --el-pagination-button-width: var(--control-height);
+  --el-pagination-button-height: var(--control-height);
+  font-size: var(--font-size-xs);
+}
+
+.el-pagination button,
+.el-pager li {
+  border-radius: var(--radius-control);
+}
+
+.el-dialog,
+.el-drawer,
+.el-dropdown__popper {
+  border-radius: var(--radius-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.el-dropdown-menu {
+  border-radius: var(--radius-overlay);
+}
+
+.el-dialog__header,
+.el-dialog__body,
+.el-dialog__footer {
+  padding-inline: var(--spacing-4);
+}
+
+.el-overlay {
+  background-color: var(--surface-overlay);
+}
+
+@media (max-width: 767px) {
+  .el-button,
+  .el-input__wrapper,
+  .el-select__wrapper,
+  .el-input-number,
+  .el-segmented,
+  .el-switch {
+    min-height: var(--mobile-control-height);
+    touch-action: manipulation;
+  }
+
+  .el-pagination button,
+  .el-pager li {
+    min-width: var(--mobile-control-height);
+    min-height: var(--mobile-control-height);
+  }
+}

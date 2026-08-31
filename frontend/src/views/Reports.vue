@@ -1,317 +1,290 @@
 <template>
-  <div class="reports-page">
-    <!-- 页面头部 -->
-    <div class="page-header">
+  <main class="reports-page workbench-page">
+    <header class="reports-page__header workbench-page__header">
       <div>
-        <h2 class="page-title">复盘报告</h2>
-        <p class="page-subtitle">AI 每日生成专业复盘，涵盖市场行情与自选股分析</p>
+        <div class="reports-page__title-line">
+          <h1 data-page-title tabindex="-1">复盘报告</h1>
+          <span v-if="total" class="reports-page__total">共 {{ total }} 份</span>
+        </div>
       </div>
-      <div class="header-actions">
-        <el-button
-          type="primary"
-          :icon="MagicStick"
-          :loading="generating"
-          @click="handleGenerate"
-        >
-          手动生成今日报告
-        </el-button>
+
+      <el-button
+        type="primary"
+        :icon="Refresh"
+        :loading="generating"
+        @click="generate"
+      >
+        生成今日报告
+      </el-button>
+    </header>
+
+    <p v-if="pollMessage" class="reports-page__poll-note" aria-live="polite">
+      {{ pollMessage }}
+    </p>
+
+    <section class="reports-page__toolbar" aria-label="报告列表控制">
+      <div class="reports-page__toolbar-left">
+        <el-select v-model="statusFilter" size="small" aria-label="报告状态筛选">
+          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="daysFilter" size="small" aria-label="报告日期范围">
+          <el-option v-for="item in daysOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <span class="reports-page__result-count">共 {{ total }} 份</span>
       </div>
-    </div>
-
-    <!-- 报告列表 -->
-    <div class="reports-list" v-loading="loading">
-      <el-empty
-        v-if="!loading && reports.length === 0"
-        description="暂无复盘报告，点击上方按钮生成第一份"
-      >
-        <el-button type="primary" @click="handleGenerate" :loading="generating">
-          生成今日报告
-        </el-button>
-      </el-empty>
-
-      <el-card
-        v-for="report in reports"
-        :key="report.id"
-        class="report-card card-shadow"
-        @click="goToDetail(report)"
-      >
-        <div class="report-card-header">
-          <div class="report-date">
-            <el-icon :size="18" color="#8b5cf6"><Calendar /></el-icon>
-            <span class="date-text">{{ report.report_date }}</span>
-          </div>
-          <el-tag
-            :type="statusTagType(report.status)"
-            effect="light"
-            size="small"
-            class="status-tag"
-          >
-            {{ statusText(report.status) }}
-          </el-tag>
-        </div>
-
-        <div class="report-stats">
-          <div class="stat-item">
-            <el-icon :size="16" color="#6b7280"><TrendCharts /></el-icon>
-            <span>覆盖 {{ report.stock_count || 0 }} 只股票</span>
-          </div>
-        </div>
-
-        <div class="report-summary" v-if="report.market_summary">
-          <div class="summary-label">市场总览</div>
-          <div class="summary-text">{{ truncateText(report.market_summary, 80) }}</div>
-        </div>
-
-        <div class="report-footer">
-          <span class="create-time">
-            <el-icon :size="14" color="#9ca3af"><Clock /></el-icon>
-            生成于 {{ formatTime(report.created_at) }}
-          </span>
-          <el-button type="primary" link>
-            查看详情
-            <el-icon><ArrowRight /></el-icon>
-          </el-button>
-        </div>
-      </el-card>
-    </div>
-
-    <!-- 分页 -->
-    <div class="pagination-wrapper" v-if="total > pageSize">
       <el-pagination
-        background
-        layout="prev, pager, next, total"
+        v-if="total > pageSize && !isMobile"
+        class="reports-page__pagination reports-page__pagination--top"
+        small
+        :layout="paginationLayout"
         :total="total"
-        :current-page="page"
         :page-size="pageSize"
-        @current-change="handlePageChange"
+        :current-page="page"
+        @current-change="changePage"
       />
+    </section>
+
+    <section class="reports-page__workspace" aria-label="报告列表">
+      <StatusState v-if="loading" state="loading" />
+      <StatusState
+        v-else-if="error"
+        state="error"
+        description="报告列表暂时无法加载。"
+        @retry="loadReports"
+      />
+      <StatusState
+        v-else-if="!reports.length"
+        state="empty"
+        title="暂无复盘报告"
+      >
+        <template #action>
+          <el-button type="primary" @click="generate">生成今日报告</el-button>
+        </template>
+      </StatusState>
+      <ReportTable v-else :reports="reports" @open="openReport" />
+    </section>
+
+    <div v-if="total > pageSize" class="reports-page__feedback">
+      <el-pagination
+        class="reports-page__pagination"
+        small
+        :layout="paginationLayout"
+        :total="total"
+        :page-size="pageSize"
+        :current-page="page"
+        @current-change="changePage"
+      />
+      <span v-if="isMobile" class="reports-page__page-status" aria-live="polite">第 {{ page }} / {{ pageCount }} 页</span>
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import {
-  MagicStick, Calendar, TrendCharts, Clock, ArrowRight,
-} from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { reportApi } from '@/api/report'
+import StatusState from '@/components/base/StatusState.vue'
+import ReportTable from '@/components/reports/ReportTable.vue'
+import { useResponsive } from '@/composables/useResponsive'
 
 const router = useRouter()
-
-const loading = ref(false)
-const generating = ref(false)
+const { isMobile } = useResponsive()
 const reports = ref([])
-const page = ref(1)
-const pageSize = ref(10)
 const total = ref(0)
+const page = ref(1)
+const pageSize = 10
+const loading = ref(true)
+const error = ref(false)
+const generating = ref(false)
+const pollMessage = ref('')
+const statusFilter = ref('all')
+const daysFilter = ref('30')
+const statusOptions = [
+  { label: '全部状态', value: 'all' }, { label: '已完成', value: 'completed' },
+  { label: '生成中', value: 'generating' }, { label: '生成失败', value: 'failed' }, { label: '待生成', value: 'pending' },
+]
+const daysOptions = [
+  { label: '最近 7 天', value: '7' }, { label: '最近 30 天', value: '30' },
+  { label: '最近 90 天', value: '90' }, { label: '全部时间', value: 'all' },
+]
+const paginationLayout = computed(() => isMobile.value ? 'prev, next' : 'prev, pager, next')
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+
+let pollTimer = null
+let pollStartedAt = 0
+let pollingId = null
+let listRequestId = 0
 
 async function loadReports() {
+  const requestId = ++listRequestId
   loading.value = true
+  error.value = false
+
   try {
-    const data = await reportApi.getList({ page: page.value, page_size: pageSize.value })
+    const data = await reportApi.getList({
+      page: page.value,
+      page_size: pageSize,
+      status: statusFilter.value,
+      days: daysFilter.value,
+    })
+    if (requestId !== listRequestId) return
     reports.value = data.items || []
     total.value = data.total || 0
-  } catch (e) {
-    ElMessage.error('加载报告列表失败')
-    console.error(e)
+  } catch {
+    if (requestId !== listRequestId) return
+    error.value = true
   } finally {
+    if (requestId !== listRequestId) return
     loading.value = false
   }
 }
 
-async function handleGenerate() {
-  if (generating.value) return
+function stopPolling(message = '') {
+  clearTimeout(pollTimer)
+  pollTimer = null
+  pollingId = null
+  pollMessage.value = message
+}
+
+async function pollReport() {
+  if (!pollingId || Date.now() - pollStartedAt >= 120000) {
+    return stopPolling('生成时间较长，可稍后手动刷新列表。')
+  }
+
+  try {
+    const item = await reportApi.getDetail(pollingId)
+
+    if (['completed', 'failed'].includes(item.status)) {
+      stopPolling(item.status === 'completed' ? '今日报告已完成。' : '今日报告生成失败。')
+      await loadReports()
+      return
+    }
+  } catch {
+    pollMessage.value = '状态查询暂时失败，正在重试。'
+  }
+
+  pollTimer = setTimeout(pollReport, 5000)
+}
+
+async function generate() {
+  if (generating.value || pollingId) return
+
   generating.value = true
+
   try {
     const data = await reportApi.generateToday()
-    ElMessage.success(data.message || '报告生成任务已提交，请稍后查看')
-    // 刷新列表
+    pollingId = data.report_id
+    pollStartedAt = Date.now()
+    pollMessage.value = data.message || '报告生成中。'
     page.value = 1
-    setTimeout(loadReports, 1500)
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '生成失败，请稍后重试')
-    console.error(e)
+    await loadReports()
+    pollReport()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '生成失败，请稍后重试')
   } finally {
     generating.value = false
   }
 }
 
-function goToDetail(report) {
+function openReport(report) {
   if (report.status === 'completed') {
     router.push(`/reports/${report.id}`)
   }
 }
 
-function handlePageChange(p) {
-  page.value = p
+function changePage(value) {
+  page.value = value
   loadReports()
 }
 
-function statusText(status) {
-  const map = {
-    pending: '待生成',
-    generating: '生成中',
-    completed: '已完成',
-    failed: '生成失败',
-  }
-  return map[status] || status
-}
-
-function statusTagType(status) {
-  const map = {
-    pending: 'info',
-    generating: 'warning',
-    completed: 'success',
-    failed: 'danger',
-  }
-  return map[status] || 'info'
-}
-
-function truncateText(text, maxLen) {
-  if (!text) return ''
-  if (text.length <= maxLen) return text
-  return text.substring(0, maxLen) + '...'
-}
-
-function formatTime(dateStr) {
-  if (!dateStr) return '--'
-  const date = new Date(dateStr)
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  return `${month}-${day} ${hours}:${minutes}`
-}
-
-onMounted(() => {
+watch([statusFilter, daysFilter], () => {
+  page.value = 1
   loadReports()
 })
+
+onMounted(loadReports)
+onBeforeUnmount(() => stopPolling())
 </script>
 
 <style scoped>
 .reports-page {
-  max-width: 1000px;
-  margin: 0 auto;
+  gap: var(--spacing-3);
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
+.reports-page__header {
+  gap: var(--spacing-3);
 }
 
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 4px 0;
+.reports-page__title-line { display: flex; align-items: baseline; gap: var(--spacing-2); }
+.reports-page__total, .reports-page__toolbar { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.reports-page__toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 var(--spacing-2); border-bottom: 1px solid var(--border-subtle); background: var(--surface-primary); }
+.reports-page__toolbar-left { display: flex; align-items: center; gap: var(--spacing-2); min-width: 0; }
+.reports-page__toolbar :deep(.el-select) { width: 112px; }
+.reports-page__result-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.reports-page__workspace {
+  display: grid;
+  min-width: 0;
+  min-block-size: 220px;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-default);
 }
 
-.page-subtitle {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0;
+.reports-page__workspace :deep(.report-row) {
+  min-height: 52px;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.reports-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.report-card {
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-
-.report-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-}
-
-.report-card-header {
+.reports-page__feedback {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.report-date {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.date-text {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.status-tag {
-  font-size: 12px;
-}
-
-.report-stats {
-  margin-bottom: 12px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.report-summary {
-  padding: 12px 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-
-.summary-label {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-bottom: 4px;
-}
-
-.summary-text {
-  font-size: 14px;
-  color: #4b5563;
-  line-height: 1.6;
-}
-
-.report-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid #f0f2f5;
-}
-
-.create-time {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #9ca3af;
-}
-
-.pagination-wrapper {
-  display: flex;
   justify-content: center;
-  margin-top: 24px;
+  gap: var(--spacing-2);
+  min-block-size: 48px;
+}
+
+.reports-page__pagination {
+  justify-content: center;
+  min-height: 32px;
+}
+.reports-page__pagination--top { margin-left: auto; }
+
+.reports-page__poll-note {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  text-align: center;
+  background: var(--surface-secondary);
+  border-left: 2px solid var(--color-primary);
+}
+
+@media (max-width: 767px) {
+  .reports-page__header :deep(.el-button) {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .reports-page__workspace :deep(.report-row) {
+    min-height: 64px;
+  }
+
+  .reports-page__toolbar { align-items: flex-start; flex-direction: column; padding: var(--spacing-2); }
+  .reports-page__toolbar-left { width: 100%; }
+  .reports-page__toolbar :deep(.el-select) { flex: 1; width: auto; }
+
+  .reports-page__pagination :deep(.btn-prev),
+  .reports-page__pagination :deep(.btn-next) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .reports-page__page-status {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
 }
 </style>

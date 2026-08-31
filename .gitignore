@@ -21,5 +21,15 @@ dist/
 # Env
 .env
 
+# Runtime
+.runtime/
+
+# Local agent worktrees
+.claude/worktrees/
+
+# Generated test artifacts
+test-results/
+frontend/test-results/
+
 # Superpowers SDD
 .superpowers/

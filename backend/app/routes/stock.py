@@ -7,6 +7,7 @@ from typing import List
 
 from app.services import stock_data
 from app.services.ai_analyst import analyze_stock_stream
+from app.services.sse import format_sse_data
 from app.models.schemas import (
     StockInfo, KLineData, FinancialData, StockSearchItem
 )
@@ -81,7 +82,7 @@ async def analyze_stock(code: str):
     """
     async def event_stream():
         # 第一步：获取股票数据
-        yield "data: 📊 正在获取股票数据...\n\n"
+        yield format_sse_data("📊 正在获取股票数据...")
 
         # 尝试获取实时行情
         info = stock_data.get_stock_info(code)
@@ -111,20 +112,19 @@ async def analyze_stock(code: str):
             )
 
         if not info:
-            yield "data: ❌ 未找到该股票，请检查代码是否正确\n\n"
-            yield "data: [DONE]\n\n"
+            yield format_sse_data("❌ 未找到该股票，请检查代码是否正确")
+            yield format_sse_data("[DONE]")
             return
 
         financial = stock_data.get_financial_data(code)
 
-        yield "data: 🤖 AI 正在分析中，请稍候...\n\n\n"
+        yield format_sse_data("🤖 AI 正在分析中，请稍候...")
 
         # 第二步：流式输出 AI 分析结果
         async for chunk in analyze_stock_stream(info, kline, financial):
-            # SSE 格式：data: {content}\n\n
-            yield f"data: {chunk}\n\n"
+            yield format_sse_data(chunk)
 
-        yield "data: [DONE]\n\n"
+        yield format_sse_data("[DONE]")
 
     return StreamingResponse(
         event_stream(),

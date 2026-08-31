@@ -1,368 +1,273 @@
 <template>
-  <div class="stock-detail-page">
-    <!-- 返回按钮 + 股票信息栏 -->
-    <div class="detail-header">
-      <div class="header-left">
-        <el-button :icon="ArrowLeft" circle @click="goBack" />
-        <div class="stock-title">
-          <h1 class="stock-name">{{ stockInfo?.name || '--' }}</h1>
-          <span class="stock-code">{{ stockInfo?.code || code }}</span>
-          <el-button
-            v-if="isWatched"
-            type="warning"
-            plain
-            size="small"
-            :icon="StarFilled"
-            @click="removeFromWatchlist"
-            class="watch-btn"
-          >
-            已自选
-          </el-button>
-          <el-button
-            v-else
-            type="primary"
-            size="small"
-            :icon="Star"
-            @click="addToWatchlist"
-            class="watch-btn"
-          >
-            加自选
-          </el-button>
-        </div>
-      </div>
-      <div class="header-right" v-if="stockInfo">
-        <div class="price-block">
-          <span class="price" :class="priceClass">{{ stockInfo.price?.toFixed(2) }}</span>
-          <span class="change" :class="priceClass">
-            {{ stockInfo.change_pct > 0 ? '+' : '' }}{{ stockInfo.change_pct?.toFixed(2) }}%
-            <span class="change-amount">
-              {{ stockInfo.change_amount > 0 ? '+' : '' }}{{ stockInfo.change_amount?.toFixed(2) }}
-            </span>
-          </span>
-        </div>
-      </div>
-    </div>
+  <div class="stock-detail-page workbench-page">
+    <StockHeader class="stock-detail-page__identity-band workbench-page__header" :name="stockInfo?.name || '--'" :code="String(code || '')" :price="stockInfo?.price" :change-amount="stockInfo?.change_amount" :change-percent="stockInfo?.change_pct" :watched="isWatched" @back="router.back()" @toggle-watch="toggleWatch" />
+    <StatusState v-if="quoteLoading && !stockInfo" state="loading" title="正在读取个股行情" description="读取最新价格、涨跌幅和成交数据。" :min-height="220" />
+    <StatusState v-else-if="quoteError && !stockInfo" state="error" title="个股行情加载失败" description="当前无法读取该股票，请稍后重试。" :min-height="220" @retry="loadQuote" />
 
-    <!-- 行情数据栏 -->
-    <el-row v-if="stockInfo" class="quote-bar">
-      <el-col :span="24">
-        <div class="quote-items">
-          <div class="quote-item">
-            <span class="label">今开</span>
-            <span class="value">{{ stockInfo.open?.toFixed(2) }}</span>
-          </div>
-          <div class="quote-item">
-            <span class="label">昨收</span>
-            <span class="value">{{ stockInfo.pre_close?.toFixed(2) }}</span>
-          </div>
-          <div class="quote-item">
-            <span class="label text-up">最高</span>
-            <span class="value text-up">{{ stockInfo.high?.toFixed(2) }}</span>
-          </div>
-          <div class="quote-item">
-            <span class="label text-down">最低</span>
-            <span class="value text-down">{{ stockInfo.low?.toFixed(2) }}</span>
-          </div>
-          <div class="quote-item">
-            <span class="label">成交量</span>
-            <span class="value">{{ formatVolume(stockInfo.volume) }}</span>
-          </div>
-          <div class="quote-item">
-            <span class="label">成交额</span>
-            <span class="value">{{ formatAmount(stockInfo.amount) }}</span>
-          </div>
-        </div>
-      </el-col>
-    </el-row>
+    <template v-else>
+      <section class="stock-detail-page__workspace">
+        <section class="stock-detail-page__chart" aria-label="K 线研究区">
+          <StatusState v-if="klineLoading && !klineData" state="loading" title="正在加载 K 线" :min-height="480" />
+          <StatusState v-else-if="klineError && !klineData" state="error" title="K 线数据加载失败" :min-height="480" @retry="loadKline" />
+          <KLineChart v-else :kline-data="klineData" :loading="klineLoading" @period-change="handlePeriodChange" />
+        </section>
 
-    <!-- 主体内容 -->
-    <div class="detail-body">
-      <!-- K线图 -->
-      <el-card class="chart-card card-shadow" v-loading="loading.kline">
-        <KLineChart
-          :kline-data="klineData"
-          :loading="loading.kline"
-          @period-change="handlePeriodChange"
-        />
-      </el-card>
-
-      <el-row :gutter="16" class="info-row">
-        <el-col :span="12">
-          <FinancialCard :financial="financial" :loading="loading.financial" />
-        </el-col>
-        <el-col :span="12">
-          <AiAdvice
-            :code="code"
-            :analyzing="analyzing"
-            :advice="aiAdvice"
-            @start-analyze="startAnalyze"
-          />
-        </el-col>
-      </el-row>
-    </div>
+        <aside class="stock-detail-page__research">
+          <QuoteFacts v-if="stockInfo" :stock="stockInfo" />
+          <el-tabs v-model="activeTab" class="stock-detail-page__tabs">
+            <el-tab-pane label="财务" name="financial">
+              <StatusState v-if="financialState === 'loading'" state="loading" title="正在读取财务字段" description="只显示财务接口返回的真实字段。" :min-height="260" />
+              <StatusState v-else-if="financialState === 'error'" state="error" title="财务数据加载失败" description="当前无法读取财务数据，可重新尝试。" :min-height="260" @retry="loadFinancial" />
+              <StatusState v-else-if="financialState === 'empty'" state="empty" title="暂无财务数据" description="该股票当前没有返回财务字段。" :min-height="260" />
+              <FinancialCard v-else :financial="financial" :loading="false" />
+            </el-tab-pane>
+            <el-tab-pane label="AI 分析" name="ai">
+              <AiAdvice :code="String(code || '')" :advice="aiAdvice" :state="aiState" :error-message="aiErrorMessage" @start-analyze="startAnalyze" />
+            </el-tab-pane>
+          </el-tabs>
+        </aside>
+      </section>
+    </template>
+    <GroupPicker :visible="pickerVisible" :model-value="selectedGroupId" :groups="watchlistStore.groupNames" @close="pickerVisible = false" @update:model-value="selectedGroupId = $event" @confirm="confirmAddToGroup" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import {
-  ArrowLeft, Star, StarFilled,
-} from '@element-plus/icons-vue'
-import { useWatchlistStore } from '../store'
-
-import KLineChart from '../components/KLineChart.vue'
-import FinancialCard from '../components/FinancialCard.vue'
-import AiAdvice from '../components/AiAdvice.vue'
-
-import { getStockInfo, getKlineData, getFinancialData, analyzeStock } from '../api/stock'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { analyzeStock, getFinancialData, getKlineData, getStockInfo } from '@/api/stock'
+import AiAdvice from '@/components/AiAdvice.vue'
+import FinancialCard from '@/components/FinancialCard.vue'
+import KLineChart from '@/components/KLineChart.vue'
+import StatusState from '@/components/base/StatusState.vue'
+import GroupPicker from '@/components/watchlist/GroupPicker.vue'
+import QuoteFacts from '@/components/stock/QuoteFacts.vue'
+import StockHeader from '@/components/stock/StockHeader.vue'
+import { useWatchlistStore } from '@/store'
+import { useUserStore } from '@/store/user'
 
 const route = useRoute()
 const router = useRouter()
-const store = useWatchlistStore()
-
-const code = computed(() => route.params.code)
-
+const watchlistStore = useWatchlistStore()
+const userStore = useUserStore()
+const code = computed(() => String(route.params.code || ''))
+const activeTab = ref('financial')
 const stockInfo = ref(null)
 const klineData = ref(null)
 const financial = ref(null)
 const aiAdvice = ref('')
-const analyzing = ref(false)
+const aiState = ref('idle')
+const aiErrorMessage = ref('')
 const klinePeriod = ref('daily')
+const quoteLoading = ref(false)
+const klineLoading = ref(false)
+const quoteError = ref(false)
+const klineError = ref(false)
+const financialState = ref('idle')
+const pickerVisible = ref(false)
+const selectedGroupId = ref('')
+let aiSource = null
+let pageGeneration = 0
+let quoteRequestId = 0
+let klineRequestId = 0
+let financialRequestId = 0
+let aiRequestId = 0
+const isWatched = computed(() => watchlistStore.isWatched(code.value))
 
-const loading = reactive({
-  info: false,
-  kline: false,
-  financial: false,
-})
-
-const isWatched = computed(() => store.isWatched(code.value))
-
-const priceClass = computed(() => {
-  if (!stockInfo.value) return ''
-  if (stockInfo.value.change_pct > 0) return 'up'
-  if (stockInfo.value.change_pct < 0) return 'down'
-  return ''
-})
-
-function formatVolume(vol) {
-  if (!vol) return '--'
-  if (vol >= 10000) return (vol / 10000).toFixed(2) + '万手'
-  return vol + '手'
+function isCurrentRequest(generation, requestId, latestId, targetCode, targetPeriod = '') {
+  return generation === pageGeneration && requestId === latestId && targetCode === code.value && (!targetPeriod || targetPeriod === klinePeriod.value)
 }
 
-function formatAmount(amount) {
-  if (!amount) return '--'
-  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + '亿'
-  if (amount >= 10000) return (amount / 10000).toFixed(2) + '万'
-  return amount + '元'
+function isCurrentAiRequest(requestId, targetCode) {
+  return requestId === aiRequestId && targetCode === code.value
 }
 
-function goBack() {
-  router.back()
+function closeAiSource() {
+  aiRequestId += 1
+  if (!aiSource) return
+  aiSource.close()
+  aiSource = null
 }
 
-async function loadAllData() {
-  const tasks = [loadStockInfo(), loadKlineData(), loadFinancialData()]
-  await Promise.all(tasks)
+function resetPageState() {
+  closeAiSource()
+  stockInfo.value = null
+  klineData.value = null
+  financial.value = null
+  aiAdvice.value = ''
+  aiState.value = 'idle'
+  aiErrorMessage.value = ''
+  quoteLoading.value = false
+  klineLoading.value = false
+  quoteError.value = false
+  klineError.value = false
+  financialState.value = 'idle'
+  pickerVisible.value = false
 }
 
-async function loadStockInfo() {
-  loading.info = true
+async function loadQuote(generation = pageGeneration) {
+  const requestId = ++quoteRequestId
+  const targetCode = code.value
+  quoteLoading.value = true
+  quoteError.value = false
   try {
-    stockInfo.value = await getStockInfo(code.value)
-  } catch (e) {
-    ElMessage.error('获取股票信息失败')
+    const data = await getStockInfo(targetCode)
+    if (!isCurrentRequest(generation, requestId, quoteRequestId, targetCode)) return
+    stockInfo.value = data
+  } catch {
+    if (!isCurrentRequest(generation, requestId, quoteRequestId, targetCode)) return
+    stockInfo.value = null
+    quoteError.value = true
   } finally {
-    loading.info = false
+    if (isCurrentRequest(generation, requestId, quoteRequestId, targetCode)) quoteLoading.value = false
   }
 }
 
-async function loadKlineData() {
-  loading.kline = true
+async function loadKline(generation = pageGeneration) {
+  const requestId = ++klineRequestId
+  const targetCode = code.value
+  const targetPeriod = klinePeriod.value
+  klineLoading.value = true
+  klineError.value = false
   try {
-    klineData.value = await getKlineData(code.value, klinePeriod.value)
-  } catch (e) {
-    ElMessage.error('获取K线数据失败')
+    const data = await getKlineData(targetCode, targetPeriod)
+    if (!isCurrentRequest(generation, requestId, klineRequestId, targetCode, targetPeriod)) return
+    klineData.value = data
+  } catch {
+    if (!isCurrentRequest(generation, requestId, klineRequestId, targetCode, targetPeriod)) return
+    klineData.value = null
+    klineError.value = true
   } finally {
-    loading.kline = false
+    if (isCurrentRequest(generation, requestId, klineRequestId, targetCode, targetPeriod)) klineLoading.value = false
   }
 }
 
-async function loadFinancialData() {
-  loading.financial = true
+async function loadFinancial(generation = pageGeneration) {
+  const requestId = ++financialRequestId
+  const targetCode = code.value
+  financialState.value = 'loading'
   try {
-    financial.value = await getFinancialData(code.value)
-  } catch (e) {
-    // 财务数据失败不弹窗，静默处理
-  } finally {
-    loading.financial = false
+    const data = await getFinancialData(targetCode)
+    if (!isCurrentRequest(generation, requestId, financialRequestId, targetCode)) return
+    financial.value = data
+    financialState.value = financial.value ? 'success' : 'empty'
+  } catch (error) {
+    if (!isCurrentRequest(generation, requestId, financialRequestId, targetCode)) return
+    financial.value = null
+    financialState.value = error?.response?.status === 404 ? 'empty' : 'error'
   }
 }
 
 function handlePeriodChange(period) {
+  if (period === klinePeriod.value) return
   klinePeriod.value = period
-  loadKlineData()
+  if (code.value) loadKline()
 }
 
-let sseSource = null
-
 function startAnalyze() {
-  if (!code.value || analyzing.value) return
-  analyzing.value = true
+  if (!code.value || aiState.value === 'loading') return
+  closeAiSource()
   aiAdvice.value = ''
-
-  if (sseSource) sseSource.close()
-
-  sseSource = analyzeStock(
-    code.value,
-    (data) => { aiAdvice.value += data },
-    () => { analyzing.value = false },
+  aiErrorMessage.value = ''
+  aiState.value = 'loading'
+  const requestId = ++aiRequestId
+  const targetCode = code.value
+  aiSource = analyzeStock(
+    targetCode,
+    (chunk) => {
+      if (!isCurrentAiRequest(requestId, targetCode) || chunk.startsWith('📊') || chunk.startsWith('🤖')) return
+      if (chunk.startsWith('❌')) {
+        aiErrorMessage.value = chunk
+        aiState.value = 'error'
+        return
+      }
+      aiAdvice.value += chunk
+    },
     () => {
-      analyzing.value = false
-      if (!aiAdvice.value) ElMessage.error('AI 分析失败，请稍后重试')
+      if (!isCurrentAiRequest(requestId, targetCode)) return
+      aiState.value = aiAdvice.value.trim() ? 'success' : 'empty'
+      aiSource = null
+    },
+    () => {
+      if (!isCurrentAiRequest(requestId, targetCode)) return
+      aiState.value = aiAdvice.value.trim() ? 'success' : 'error'
+      if (!aiAdvice.value) aiErrorMessage.value = 'AI 分析失败，请稍后重试'
+      aiSource = null
     }
   )
 }
 
-async function addToWatchlist() {
+function toggleWatch() {
   if (!stockInfo.value) return
-  const success = await store.addStock({
-    code: stockInfo.value.code,
-    name: stockInfo.value.name,
-  })
-  if (success) {
-    ElMessage.success(`已添加「${stockInfo.value.name}」到自选`)
-  } else {
-    ElMessage.warning('已在自选列表中')
+  if (isWatched.value) {
+    removeFromWatchlist()
+    return
   }
+  if (!userStore.isLoggedIn) {
+    userStore.requestLogin(route.fullPath)
+    return
+  }
+  selectedGroupId.value = watchlistStore.activeGroup || watchlistStore.groupNames[0]?.id || ''
+  pickerVisible.value = true
 }
 
 async function removeFromWatchlist() {
-  await store.removeStock(code.value)
-  ElMessage.success('已移出自选')
+  const targetCode = code.value
+  const groups = watchlistStore.groups
+    .filter((group) => group.stocks.some((stock) => stock.code === targetCode))
+    .map((group) => ({ id: group.id, name: group.name }))
+  if (!groups.length) return
+  for (const group of groups) await watchlistStore.removeStock(targetCode, group.id)
+  const remaining = groups.filter((group) => watchlistStore.isWatched(targetCode, group.id))
+  if (remaining.length === groups.length) return ElMessage.error('移出自选失败')
+  if (!remaining.length) return ElMessage.success('已移出自选')
+  ElMessage.warning(`已从 ${groups.length - remaining.length} 个分组移出，仍保留在 ${remaining.length} 个分组`)
 }
 
-watch(code, () => {
-  if (code.value) {
-    aiAdvice.value = ''
-    loadAllData()
+async function confirmAddToGroup(groupId) {
+  if (!stockInfo.value) return
+  const result = await watchlistStore.addStockToGroup(groupId, {
+    code: stockInfo.value.code,
+    name: stockInfo.value.name,
+  })
+  if (result.success) {
+    ElMessage.success(`已将「${stockInfo.value.name}」加入「${result.groupName}」`)
+  } else if (result.reason === 'duplicate') {
+    ElMessage.warning(`「${stockInfo.value.name}」已在「${result.groupName}」中`)
+  } else {
+    ElMessage.error('加入自选失败')
   }
-})
+  pickerVisible.value = false
+}
 
-onMounted(() => {
-  if (code.value) {
-    loadAllData()
-  }
+function loadPage() {
+  const generation = ++pageGeneration
+  resetPageState()
+  loadQuote(generation)
+  loadKline(generation)
+  loadFinancial(generation)
+}
+
+watch(code, (nextCode, prevCode) => {
+  if (nextCode === prevCode) return
+  if (!nextCode) return resetPageState()
+  loadPage()
+}, { immediate: true })
+
+onUnmounted(() => {
+  closeAiSource()
 })
 </script>
 
 <style scoped>
-.stock-detail-page {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* 头部 */
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.stock-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.stock-name {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
-}
-.stock-code {
-  font-size: 16px;
-  color: #6b7280;
-}
-.watch-btn {
-  margin-left: 12px;
-}
-
-.header-right {
-  text-align: right;
-}
-.price-block {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-}
-.price {
-  font-size: 36px;
-  font-weight: 700;
-  line-height: 1;
-}
-.price.up { color: #ef4444; }
-.price.down { color: #10b981; }
-
-.change {
-  font-size: 18px;
-  font-weight: 600;
-}
-.change.up { color: #ef4444; }
-.change.down { color: #10b981; }
-.change-amount {
-  font-size: 14px;
-  margin-left: 8px;
-}
-
-/* 行情栏 */
-.quote-bar {
-  margin-bottom: 20px;
-}
-.quote-items {
-  display: flex;
-  gap: 40px;
-  padding: 12px 0;
-}
-.quote-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.quote-item .label {
-  font-size: 12px;
-  color: #6b7280;
-}
-.quote-item .value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.text-up { color: #ef4444 !important; }
-.text-down { color: #10b981 !important; }
-
-/* 主体内容 */
-.detail-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.chart-card {
-  border-radius: 12px;
-}
-
-.info-row {
-  margin: 0 !important;
-}
+.stock-detail-page { gap: var(--spacing-3); }
+.stock-detail-page__workspace { display: grid; grid-template-columns: minmax(0, 72fr) minmax(280px, 28fr); min-width: 0; overflow: hidden; border: 1px solid var(--border-default); background: var(--surface-primary); }
+.stock-detail-page__chart,.stock-detail-page__research { min-width: 0; }
+.stock-detail-page__research { display: grid; align-content: start; border-left: 1px solid var(--border-default); }
+.stock-detail-page__tabs :deep(.el-tabs__header) { margin: 0; padding: 0 var(--spacing-3); border-top: 1px solid var(--border-subtle); }
+.stock-detail-page__tabs :deep(.el-tabs__content) { min-height: 280px; }
+.stock-detail-page__tabs :deep(.el-tab-pane) { min-width: 0; }
+@media (max-width: 1023px) { .stock-detail-page__workspace { grid-template-columns: minmax(0, 1fr); } .stock-detail-page__research { border-top: 1px solid var(--border-default); border-left: 0; } }
+@media (max-width: 767px) { .stock-detail-page__tabs :deep(.el-tabs__content) { min-height: 320px; } .stock-detail-page__tabs :deep(.el-tabs__item) { min-height: 44px; } }
 </style>

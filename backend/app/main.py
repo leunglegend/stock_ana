@@ -5,6 +5,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 
@@ -17,6 +18,8 @@ from app.routes.auth import router as auth_router
 from app.routes.watchlist import router as watchlist_router
 from app.routes.notification import router as notification_router
 from app.routes.report import router as report_router
+from app.routes.monitor import router as monitor_router
+from app.frontend import mount_frontend
 
 app = FastAPI(
     title="股票分析 API",
@@ -32,6 +35,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # 注册路由
 app.include_router(stock_router)
@@ -40,6 +44,7 @@ app.include_router(auth_router)
 app.include_router(watchlist_router)
 app.include_router(notification_router)
 app.include_router(report_router)
+app.include_router(monitor_router)
 
 
 @app.on_event("startup")
@@ -87,18 +92,12 @@ async def shutdown_event():
         logger.error("关闭定时任务调度器失败: %s", e)
 
 
-@app.get("/", summary="健康检查")
-async def root():
-    return {
-        "status": "ok",
-        "service": "股票分析 API",
-        "ai_available": settings.ai_available,
-    }
-
-
 @app.get("/health", summary="健康检查")
 async def health():
     return {"status": "ok"}
+
+
+mount_frontend(app)
 
 
 if __name__ == "__main__":

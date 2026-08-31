@@ -12,6 +12,7 @@ from app.services.data_cache import (
     get_market_summary_cached,
 )
 from app.services.ai_analyst import analyze_market_stream
+from app.services.sse import format_sse_data
 from app.models.schemas import BoardInfo, BoardStock, MarketSummary
 
 router = APIRouter(prefix="/api/board", tags=["板块"])
@@ -66,21 +67,21 @@ async def get_market_ai_summary():
     AI 一句话点评当日市场，SSE 流式返回
     """
     async def event_stream():
-        yield "data: 🤖 AI 正在分析市场数据...\n\n"
+        yield format_sse_data("🤖 AI 正在分析市场数据...")
 
         # 获取市场数据
         summary = get_market_summary_cached()
         boards = get_industry_boards_cached()
 
         if not summary:
-            yield "data: ❌ 市场数据获取失败，请稍后重试\n\n"
-            yield "data: [DONE]\n\n"
+            yield format_sse_data("❌ 市场数据获取失败，请稍后重试")
+            yield format_sse_data("[DONE]")
             return
 
         async for chunk in analyze_market_stream(summary, boards or []):
-            yield f"data: {chunk}\n\n"
+            yield format_sse_data(chunk)
 
-        yield "data: [DONE]\n\n"
+        yield format_sse_data("[DONE]")
 
     return StreamingResponse(
         event_stream(),

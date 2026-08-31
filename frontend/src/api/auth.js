@@ -14,6 +14,6 @@ export const authApi = {
   },
   // 获取当前用户
   getMe() {
-    return http.get('/auth/me')
+    return http.get('/auth/me', { skipAuthRedirect: true })
   },
 }

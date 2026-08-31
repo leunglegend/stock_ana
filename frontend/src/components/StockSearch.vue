@@ -9,7 +9,6 @@
       :remote-method="handleSearch"
       :loading="loading"
       @change="handleChange"
-      size="large"
       class="search-select"
     >
       <el-option
@@ -28,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { searchStock } from '../api/stock'
 
 const emit = defineEmits(['select'])
@@ -39,27 +38,41 @@ const loading = ref(false)
 const keyword = ref('')
 
 let searchTimer = null
+let searchRequestId = 0
 
 function handleSearch(query) {
+  const requestId = ++searchRequestId
   keyword.value = query
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = null
+
   if (!query || query.length < 1) {
     options.value = []
+    loading.value = false
     return
   }
 
-  // 防抖
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(async () => {
-    loading.value = true
-    try {
-      const res = await searchStock(query)
-      options.value = res || []
-    } catch (e) {
-      options.value = []
-    } finally {
-      loading.value = false
-    }
-  }, 300)
+  searchTimer = setTimeout(() => runSearch(requestId, query), 300)
+}
+
+function isCurrentSearch(requestId, query) {
+  return requestId === searchRequestId && query === keyword.value
+}
+
+async function runSearch(requestId, query) {
+  if (!isCurrentSearch(requestId, query)) return
+  searchTimer = null
+  loading.value = true
+  try {
+    const res = await searchStock(query)
+    if (!isCurrentSearch(requestId, query)) return
+    options.value = res || []
+  } catch {
+    if (!isCurrentSearch(requestId, query)) return
+    options.value = []
+  } finally {
+    if (isCurrentSearch(requestId, query)) loading.value = false
+  }
 }
 
 function handleChange(value) {
@@ -71,6 +84,12 @@ function handleChange(value) {
     }
   }
 }
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = null
+  searchRequestId += 1
+})
 </script>
 
 <style scoped>
@@ -82,20 +101,10 @@ function handleChange(value) {
   width: 100%;
 }
 
-/* 覆盖 Element Plus 样式，让搜索框在深色背景上更明显 */
-:deep(.el-select .el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-:deep(.el-select .el-input__wrapper:hover) {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
 .empty-tip {
   padding: 12px;
   text-align: center;
-  color: #9ca3af;
-  font-size: 14px;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
 }
 </style>

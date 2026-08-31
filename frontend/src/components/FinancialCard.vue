@@ -1,88 +1,25 @@
 <template>
-  <el-card class="financial-card card-shadow" v-loading="loading">
-    <template #header>
-      <div class="card-header">
-        <el-icon><DataAnalysis /></el-icon>
-        <span>财务指标</span>
-        <span v-if="financial?.report_date" class="report-date">
-          {{ financial.report_date }}
-        </span>
-      </div>
-    </template>
+  <section class="financial-card" v-loading="loading">
+    <header class="financial-card__header">
+      <h2 class="financial-card__title">财务</h2>
+        <span v-if="financial?.report_date" class="financial-card__date">{{ financial.report_date }}</span>
+    </header>
 
-    <div v-if="financial" class="financial-grid">
-      <div class="fin-item">
-        <div class="fin-label">市盈率 (PE)</div>
-        <div class="fin-value" :class="peClass">
-          {{ formatValue(financial.pe) }}
-          <span v-if="financial.pe" class="unit">倍</span>
-        </div>
-        <div class="fin-tip">{{ getPeTip(financial.pe) }}</div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">市净率 (PB)</div>
-        <div class="fin-value">
-          {{ formatValue(financial.pb) }}
-          <span v-if="financial.pb" class="unit">倍</span>
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">总市值</div>
-        <div class="fin-value">
-          {{ formatMv(financial.total_mv) }}
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">净资产收益率 (ROE)</div>
-        <div class="fin-value" :class="roeClass">
-          {{ formatValue(financial.roe) }}
-          <span v-if="financial.roe" class="unit">%</span>
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">净利润</div>
-        <div class="fin-value">
-          {{ formatYi(financial.net_profit) }}
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">营业收入</div>
-        <div class="fin-value">
-          {{ formatYi(financial.revenue) }}
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">毛利率</div>
-        <div class="fin-value">
-          {{ formatValue(financial.gross_margin) }}
-          <span v-if="financial.gross_margin" class="unit">%</span>
-        </div>
-      </div>
-
-      <div class="fin-item">
-        <div class="fin-label">净利率</div>
-        <div class="fin-value">
-          {{ formatValue(financial.net_margin) }}
-          <span v-if="financial.net_margin" class="unit">%</span>
-        </div>
-      </div>
+    <div v-if="financial" class="financial-card__grid">
+      <article v-for="item in metrics" :key="item.label" class="financial-card__item">
+        <span class="financial-card__label">{{ item.label }}</span>
+        <span class="financial-card__value">{{ item.value }}</span>
+      </article>
     </div>
 
-    <div v-else class="empty-state">
-      <el-empty description="暂无数据" :image-size="60" />
+    <div v-else class="financial-card__empty">
+      <el-empty description="暂无财务数据" :image-size="60" />
     </div>
-  </el-card>
+  </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { DataAnalysis } from '@element-plus/icons-vue'
 
 const props = defineProps({
   financial: {
@@ -95,114 +32,91 @@ const props = defineProps({
   },
 })
 
-const peClass = computed(() => {
-  const pe = props.financial?.pe
-  if (!pe) return ''
-  if (pe < 0) return 'text-down'
-  if (pe < 20) return 'text-up'
-  if (pe > 50) return 'text-down'
-  return ''
+function formatNumber(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return '--'
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '--'
+  return `${numeric.toFixed(2)}${suffix}`
+}
+
+function formatYi(value) {
+  return formatNumber(value, '亿')
+}
+
+const metrics = computed(() => {
+  if (!props.financial) return []
+  return [
+    { label: '市盈率 PE', value: formatNumber(props.financial.pe) },
+    { label: '市净率 PB', value: formatNumber(props.financial.pb) },
+    { label: '总市值', value: formatYi(props.financial.total_mv) },
+    { label: '净资产收益率 ROE', value: formatNumber(props.financial.roe, '%') },
+    { label: '净利润', value: formatYi(props.financial.net_profit) },
+    { label: '营业收入', value: formatYi(props.financial.revenue) },
+    { label: '毛利率', value: formatNumber(props.financial.gross_margin, '%') },
+    { label: '净利率', value: formatNumber(props.financial.net_margin, '%') },
+  ]
 })
-
-const roeClass = computed(() => {
-  const roe = props.financial?.roe
-  if (!roe) return ''
-  if (roe > 15) return 'text-up'
-  if (roe < 5) return 'text-down'
-  return ''
-})
-
-function formatValue(val) {
-  if (val == null || val === '' || isNaN(val)) return '--'
-  return Number(val).toFixed(2)
-}
-
-function formatYi(val) {
-  if (val == null || val === '' || isNaN(val)) return '--'
-  return Number(val).toFixed(2) + '亿'
-}
-
-function formatMv(val) {
-  if (val == null || val === '' || isNaN(val)) return '--'
-  if (val >= 10000) return (val / 10000).toFixed(2) + '万亿'
-  return Number(val).toFixed(2) + '亿'
-}
-
-function getPeTip(pe) {
-  if (!pe) return ''
-  if (pe < 0) return '亏损'
-  if (pe < 15) return '低估'
-  if (pe < 30) return '合理'
-  if (pe < 50) return '偏高'
-  return '高估'
-}
 </script>
 
 <style scoped>
 .financial-card {
   height: 100%;
+  padding: var(--spacing-3);
 }
 
-.card-header {
+.financial-card__header {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 16px;
-  color: #1f2937;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding-bottom: var(--spacing-3);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.report-date {
-  margin-left: auto;
-  font-size: 12px;
-  font-weight: 400;
-  color: #9ca3af;
+.financial-card__date {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
 }
 
-.financial-grid {
+.financial-card__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+}
+
+.financial-card__grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
 }
 
-.fin-item {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 12px 14px;
-  transition: background 0.2s;
+.financial-card__item {
+  display: grid;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2);
+  border-top: 1px solid var(--border-subtle);
 }
 
-.fin-item:hover {
-  background: #f3f4f6;
+.financial-card__label {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
 }
 
-.fin-label {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 6px;
+.financial-card__value {
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.fin-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1f2937;
-  line-height: 1.2;
+.financial-card__empty {
+  padding: var(--spacing-6) 0;
 }
 
-.fin-value .unit {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
-  margin-left: 2px;
-}
-
-.fin-tip {
-  font-size: 11px;
-  margin-top: 4px;
-  color: #9ca3af;
-}
-
-.empty-state {
-  padding: 40px 0;
+@media (max-width: 767px) {
+  .financial-card__grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

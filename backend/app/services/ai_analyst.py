@@ -189,7 +189,6 @@ async def analyze_stock_stream(
         async with client.messages.stream(
             model=settings.ARK_MODEL,
             max_tokens=2000,
-            temperature=0.7,
             system=SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_prompt},
@@ -221,7 +220,6 @@ async def analyze_stock(
         message = await client.messages.create(
             model=settings.ARK_MODEL,
             max_tokens=2000,
-            temperature=0.7,
             system=SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_prompt},
@@ -283,7 +281,7 @@ def _build_market_summary_prompt(
 - 下跌家数：{fall_count} 家
 - 涨停：{limit_up} 家
 - 跌停：{limit_down} 家
-- 两市成交额：{total_amount:.0f} 亿元
+- 两市成交额：{_format_market_turnover(total_amount)}
 
 【涨幅居前板块】
 {boards_top_str}
@@ -294,6 +292,14 @@ def _build_market_summary_prompt(
 请用一段话进行点评，150-200字左右。
 """
     return prompt
+
+
+def _format_market_turnover(total_amount: float) -> str:
+    amount = float(total_amount or 0)
+    return (
+        f"{amount:,.0f} 亿元（约 {amount / 10000:.2f} 万亿元），"
+        f"不得写成 {amount:,.0f} 万亿元"
+    )
 
 
 async def analyze_market_stream(summary_data, boards_data) -> AsyncGenerator[str, None]:
@@ -334,7 +340,6 @@ async def analyze_market_stream(summary_data, boards_data) -> AsyncGenerator[str
         async with client.messages.stream(
             model=settings.ARK_MODEL,
             max_tokens=500,
-            temperature=0.7,
             system=MARKET_SUMMARY_SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_prompt},
@@ -529,7 +534,6 @@ def generate_stock_daily_analysis(
         message = client.messages.create(
             model=settings.ARK_MODEL,
             max_tokens=1200,
-            temperature=0.7,
             system=STOCK_DAILY_ANALYSIS_SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_prompt},
@@ -552,7 +556,7 @@ def generate_stock_daily_analysis(
     except Exception as e:
         logger_text = f"AI 盘后分析出错：{str(e)}"
         print(logger_text)
-        return logger_text, "分析出错"
+        raise RuntimeError(logger_text) from e
 
 
 DAILY_REPORT_OVERVIEW_SYSTEM_PROMPT = """你是一位资深的投资顾问，擅长从用户自选股中提炼每日复盘重点。
@@ -600,7 +604,7 @@ def _build_daily_report_overview_prompt(
             f"- 下跌家数：{market_data.fall_count} 家",
             f"- 涨停：{getattr(market_data, 'limit_up_count', 0)} 家",
             f"- 跌停：{getattr(market_data, 'limit_down_count', 0)} 家",
-            f"- 两市成交额：{market_data.total_amount:.0f} 亿元",
+            f"- 两市成交额：{_format_market_turnover(market_data.total_amount)}",
         ]
     else:
         market_lines = ["- 暂无市场数据"]
@@ -653,7 +657,6 @@ def generate_daily_report_overview(
         message = client.messages.create(
             model=settings.ARK_MODEL,
             max_tokens=1500,
-            temperature=0.7,
             system=DAILY_REPORT_OVERVIEW_SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_prompt},
@@ -685,4 +688,4 @@ def generate_daily_report_overview(
     except Exception as e:
         logger_text = f"AI 日报总览出错：{str(e)}"
         print(logger_text)
-        return logger_text, [], "市场有风险，投资需谨慎。"
+        raise RuntimeError(logger_text) from e
