@@ -44,7 +44,7 @@ class AiSdkCompatibilityTest(unittest.TestCase):
             self.assertEqual(set(), unsupported, f"unsupported parameters in {node.func.attr}")
             checked_calls += 1
 
-        self.assertEqual(5, checked_calls)
+        self.assertEqual(6, checked_calls)
 
 
 if __name__ == "__main__":
