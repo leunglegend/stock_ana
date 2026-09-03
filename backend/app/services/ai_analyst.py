@@ -689,3 +689,13 @@ def generate_daily_report_overview(
         logger_text = f"AI 日报总览出错：{str(e)}"
         print(logger_text)
         raise RuntimeError(logger_text) from e
+
+
+async def analyze_us_market_stream(snapshot):
+    """美股一句话复盘。Task 8 将替换为真实 LLM 流式生成。"""
+    if snapshot is None or not snapshot.sectors:
+        yield "今日美股主线暂不明朗（数据不足）。"
+        return
+    top = snapshot.sectors[0]
+    yield (f"今日领涨板块 {top.name}（{top.change_pct:+.2f}%，领涨 {top.leading_symbol} "
+           f"{top.leading_change_pct:+.2f}%）；标普500成分等权口径，非投资建议。")
