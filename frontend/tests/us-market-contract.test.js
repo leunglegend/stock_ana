@@ -28,3 +28,26 @@ test('useUsCard 只消费 summary 接口', async () => {
   assert.match(code, /useAsyncSection\(getUsSummary/)
   assert.doesNotMatch(code, /getUsSectors/)
 })
+
+test('UsMarket 页面骨架 = workbench-page + 摘要带 + 主从 grid', async () => {
+  const code = await read('views/UsMarket.vue')
+  assert.match(code, /class="us-market-page workbench-page/)
+  assert.match(code, /UsIndexStrip/)
+  assert.match(code, /UsAiBand|MarketAiSummary/)
+  assert.match(code, /UsSectorTable/)
+  assert.match(code, /UsSectorDetailPanel/)
+  assert.match(code, /data-page-title/)
+})
+
+test('UsMarket 页面不出现分页/搜索控件', async () => {
+  const code = await read('views/UsMarket.vue')
+  assert.doesNotMatch(code, /el-pagination/)
+  assert.doesNotMatch(code, /el-input/)
+  assert.doesNotMatch(code, /el-select/)
+})
+
+test('UsMarket 支持 ?sector= 深链还原', async () => {
+  const code = await read('views/UsMarket.vue')
+  assert.match(code, /route\.query\.sector|query\.sector/)
+  assert.match(code, /getUsSectorStocks/)
+})
