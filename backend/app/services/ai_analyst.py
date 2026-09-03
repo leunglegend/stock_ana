@@ -691,11 +691,57 @@ def generate_daily_report_overview(
         raise RuntimeError(logger_text) from e
 
 
-async def analyze_us_market_stream(snapshot):
-    """美股一句话复盘。Task 8 将替换为真实 LLM 流式生成。"""
-    if snapshot is None or not snapshot.sectors:
-        yield "今日美股主线暂不明朗（数据不足）。"
+# ===== 美股一句话复盘 =====
+
+US_MARKET_SYSTEM_PROMPT = """你是一名美股盘后复盘分析师，为中文投资者做"美股收盘复盘一句话"。
+
+硬性规则（违反即不合格）：
+1. 只用中文，输出 40-90 字一段话。
+2. 只陈述下面数据里的事实，禁止猜测或编造原因；不得使用"由于 / 受…影响 / 因为 / 因此 / 导致 / 表明"等归因、因果表述。
+3. 每条强弱判断必须能对照数据中的可核对数字（指数点位与涨跌幅、板块等权涨跌幅、领涨领跌成分 ticker 与其涨跌幅）。
+4. 涨跌范围只限于标普500成分等权口径，不得写成全市场结论；数据不足或主线不明时，直接写"今日美股主线暂不明朗"。
+5. 结尾必须追加一句："（标普500成分等权口径，非投资建议。）"
+"""
+
+
+def _build_us_market_prompt(snapshot) -> str:
+    """把美股快照转成可核对的事实清单。snapshot 为 None/空时给出兜底引导。"""
+    if snapshot is None or not getattr(snapshot, "sectors", None):
+        return ("请直接输出：今日美股主线暂不明朗。（标普500成分等权口径，非投资建议。）\n"
+                "（当前无可用复盘数据，不要编造板块或个股表现。）")
+    lines = [f"【数据日期】美东 {snapshot.as_of}（收盘）"]
+    for i in snapshot.indices:
+        lines.append(f"- 指数 {i.name}：{i.value:.2f} 点 {i.change_pct:+.2f}%")
+    gainers = [s for s in snapshot.sectors[:3]]
+    losers = [s for s in snapshot.sectors[-3:]][::-1]
+    lines.append("【领涨板块】" + "；".join(
+        f"{s.name} {s.change_pct:+.2f}%（领涨 {s.leading_symbol} {s.leading_change_pct:+.2f}%）"
+        for s in gainers) if gainers else "无")
+    lines.append("【领跌板块】" + "；".join(
+        f"{s.name} {s.change_pct:+.2f}%（领跌 {s.leading_symbol} {s.leading_change_pct:+.2f}%）"
+        for s in losers) if losers else "无")
+    adv = sum(s.advancers for s in snapshot.sectors)
+    dec = sum(s.decliners for s in snapshot.sectors)
+    lines.append(f"【成分广度】标普500成分口径：上涨 {adv} / 下跌 {dec}")
+    return "\n".join(lines)
+
+
+async def analyze_us_market_stream(snapshot) -> "AsyncGenerator[str, None]":
+    """流式生成美股复盘一句话（SSE 用）。"""
+    if not settings.ai_available:
+        yield "⚠️ AI 服务暂不可用：未配置 API Key。"
         return
-    top = snapshot.sectors[0]
-    yield (f"今日领涨板块 {top.name}（{top.change_pct:+.2f}%，领涨 {top.leading_symbol} "
-           f"{top.leading_change_pct:+.2f}%）；标普500成分等权口径，非投资建议。")
+    try:
+        user_prompt = _build_us_market_prompt(snapshot)
+        client = _get_client()
+        async with client.messages.stream(
+            model=settings.ARK_MODEL,
+            max_tokens=200,
+            system=US_MARKET_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
+    except Exception as e:
+        yield f"\n\n❌ AI 复盘出错：{str(e)}"
+        print(f"AI 美股复盘错误: {e}")
