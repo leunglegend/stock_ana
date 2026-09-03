@@ -51,6 +51,7 @@ const navBlueprint = [
   { path: '/', title: '市场', icon: 'Odometer' },
   { path: '/monitor', title: '盘中监控', compactTitle: '监控', icon: 'Monitor' },
   { path: '/board', title: '板块', icon: 'DataAnalysis' },
+  { path: '/us', title: '美股', compactTitle: '美股', icon: 'Globe' },
   { path: '/radar', title: '雷达', icon: 'TrendCharts' },
   { path: '/watchlist', title: '自选', icon: 'Star' },
   { path: '/stock/600519', title: '个股', icon: 'Money' },
@@ -66,6 +67,7 @@ function resolveNavId(path) {
   if (path === '/watchlist') return 'watchlist'
   if (path === '/search') return 'search'
   if (path === '/board') return 'board'
+  if (path === '/us') return 'us'
   if (path === '/radar') return 'radar'
   if (path === '/monitor') return 'monitor'
   return 'market'
