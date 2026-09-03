@@ -134,5 +134,95 @@ class ConstituentFetchTest(unittest.TestCase):
         self.assertEqual(as_of, "2026-09-02")
 
 
+from app.services import us_data
+from app.services.us_data import (
+    aggregate_sectors, compose_summary, sector_constituents,
+)
+from app.services.us_universe import UsUniverseMember
+from app.models.schemas import UsConstituent, UsIndexQuote, UsSector
+
+
+def _mk_members():
+    return [
+        UsUniverseMember("AAPL", "Apple", "Information Technology"),
+        UsUniverseMember("MSFT", "Microsoft", "Information Technology"),
+        UsUniverseMember("NVDA", "NVIDIA", "Information Technology"),
+        UsUniverseMember("XOM", "Exxon", "Energy"),
+        UsUniverseMember("CVX", "Chevron", "Energy"),
+    ]
+
+
+def _mk_quotes():
+    vals = {"AAPL": 2.0, "MSFT": -1.0, "NVDA": 5.0, "XOM": -3.0, "CVX": 1.0}
+    out = []
+    for sym, pct in vals.items():
+        price = 100.0 + pct
+        out.append(UsConstituent(symbol=sym, name=sym, price=price,
+                                 change_amount=pct, change_pct=pct))
+    return out
+
+
+class SectorAggregateTest(unittest.TestCase):
+    def test_equal_weight_and_advancers_decliners(self):
+        sectors = aggregate_sectors(_mk_members(), _mk_quotes())
+        by = {s.name: s for s in sectors}
+        it = by["信息技术"]
+        # (2 -1 +5)/3 = 2.0
+        self.assertAlmostEqual(it.change_pct, 2.0, places=6)
+        self.assertEqual(it.advancers, 2)   # AAPL/NVDA 涨
+        self.assertEqual(it.decliners, 1)   # MSFT 跌
+        self.assertEqual(it.constituent_count, 3)
+        self.assertEqual(it.leading_symbol, "NVDA")
+        self.assertEqual(it.leading_change_pct, 5.0)
+        self.assertEqual(it.method, "equal_weight")
+
+    def test_sectors_sorted_desc(self):
+        sectors = aggregate_sectors(_mk_members(), _mk_quotes())
+        self.assertEqual([s.change_pct for s in sectors],
+                         sorted([s.change_pct for s in sectors], reverse=True))
+
+    def test_missing_quote_member_is_excluded(self):
+        members = _mk_members() + [UsUniverseMember("ZZZZ", "Ghost", "信息技术" if False else "Energy")]
+        # ZZZZ 无行情，须不影响 Energy 板块
+        sectors = aggregate_sectors(members, _mk_quotes())
+        en = next(s for s in sectors if s.name == "能源")
+        self.assertEqual(en.constituent_count, 2)
+
+    def test_sector_constituents_filters_and_sorts(self):
+        stocks = sector_constituents(_mk_members(), _mk_quotes(), "信息技术")
+        self.assertEqual([s.symbol for s in stocks], ["NVDA", "AAPL", "MSFT"])
+
+    def test_empty_quotes_yields_empty_sectors(self):
+        self.assertEqual(aggregate_sectors(_mk_members(), []), [])
+
+
+class SummaryComposeTest(unittest.TestCase):
+    def test_compose_summary_major_indices_and_breadth(self):
+        indices = [UsIndexQuote(symbol=s, name=s, value=1, change_pct=0)
+                   for s in ("DJI", "SPX", "IXIC", "NDX", "SOX")]
+        sectors = aggregate_sectors(_mk_members(), _mk_quotes())
+        # 板块等权涨跌：信息技术 (2+(-1)+5)/3=+2.0 → 2涨1跌；能源 (-3+1)/2=-1.0 → 1涨1跌
+        s = compose_summary(indices, sectors, as_of="2026-09-02")
+        self.assertEqual(s.as_of, "2026-09-02")
+        self.assertEqual([i.symbol for i in s.indices], ["DJI", "SPX", "IXIC"])
+        self.assertEqual(s.advancers, 3)   # AAPL / NVDA / CVX
+        self.assertEqual(s.decliners, 2)   # MSFT / XOM
+        self.assertEqual(s.unchanged, 0)
+        self.assertEqual(s.breadth_scope, "标普500成分口径")
+        # 仅 2 板块时 gainers/losers 允许重叠，并集须恰好覆盖两板块
+        self.assertEqual({g.name for g in s.top_gainers} | {l.name for l in s.top_losers},
+                         {"信息技术", "能源"})
+        self.assertTrue(s.updated_at)
+
+    def test_top_gainers_losers_disjoint_and_ordered(self):
+        # 造 6 个板块：gainers = 前3 降序；losers = 后3 按跌幅升序（最大跌幅在前）
+        sectors = [UsSector(name=f"S{i}", change_pct=pct, leading_symbol="",
+                            constituent_count=10)
+                   for i, pct in enumerate([5.0, 4.0, 3.0, -1.0, -2.0, -3.0])]
+        s = compose_summary([], sectors, "2026-09-02")
+        self.assertEqual([g.name for g in s.top_gainers], ["S0", "S1", "S2"])
+        self.assertEqual([l.name for l in s.top_losers], ["S5", "S4", "S3"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,8 +8,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from app.models.schemas import UsConstituent, UsIndexQuote, UsSector
-from app.services import stock_data
+from app.models.schemas import UsConstituent, UsIndexQuote, UsSector, UsSummary
+from app.services import stock_data, us_universe
 
 # (新浪代码, 展示 symbol, 中文名)；前 3 为 3 大指数，路由取 .DJI/.INX/.IXIC
 US_INDEX_SYMBOLS = (
@@ -125,3 +125,67 @@ def fetch_constituent_quotes(members, ak=None, max_workers=16) -> tuple:
         return [], None
     as_of = max(set(dates), key=dates.count) if dates else None
     return quotes, as_of
+
+
+def aggregate_sectors(members, quotes) -> list:
+    """成员按 GICS 中文板块等权聚合。缺失行情的成员剔除，不计入任何统计。"""
+    quote_by_symbol = {q.symbol: q for q in quotes}
+    groups = {}
+    for m in members:
+        q = quote_by_symbol.get(m.symbol)
+        if q is None:
+            continue  # 无有效行情（停牌/退市/拉取失败）——不计入，避免假数据
+        groups.setdefault(m.sector_cn, []).append((m, q))
+
+    sectors = []
+    for cn in us_universe.get_sector_cns():
+        rows = groups.get(cn)
+        if not rows:
+            continue
+        pcts = [q.change_pct for _, q in rows]
+        avg = sum(pcts) / len(pcts)
+        leader = max(rows, key=lambda r: r[1].change_pct)
+        _, lq = leader
+        advancers = sum(1 for p in pcts if p > 0)
+        decliners = sum(1 for p in pcts if p < 0)
+        sectors.append(UsSector(
+            name=cn,
+            name_en=us_universe.GICS_CN_TO_EN[cn],
+            change_pct=round(avg, 4),
+            leading_symbol=lq.symbol,
+            leading_name=lq.name,
+            leading_change_pct=round(lq.change_pct, 4),
+            advancers=advancers,
+            decliners=decliners,
+            constituent_count=len(pcts),
+            method="equal_weight",
+        ))
+    return sorted(sectors, key=lambda s: s.change_pct, reverse=True)
+
+
+def sector_constituents(members, quotes, sector_cn: str) -> list:
+    """板块成分按涨跌幅降序（用于右栏下钻）。"""
+    quote_by_symbol = {q.symbol: q for q in quotes}
+    rows = [(m, quote_by_symbol[m.symbol]) for m in members
+            if m.sector_cn == sector_cn and m.symbol in quote_by_symbol]
+    return [q for _, q in sorted(rows, key=lambda r: r[1].change_pct, reverse=True)]
+
+
+def compose_summary(indices, sectors, as_of: Optional[str]):
+    """合成 UsSummary：3 大指数 + 成分口径广度 + 领涨/领跌 Top3。"""
+    from datetime import datetime
+    major = {i.symbol: i for i in indices}
+    indices_3 = [major[s] for s in _MAJOR_INDEX_SYMBOLS if s in major]
+    advancers = sum(s.advancers for s in sectors)
+    decliners = sum(s.decliners for s in sectors)
+    unchanged = sum(s.constituent_count for s in sectors) - advancers - decliners
+    return UsSummary(
+        as_of=as_of or "",
+        updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        indices=indices_3,
+        advancers=advancers,
+        decliners=decliners,
+        unchanged=unchanged,
+        top_gainers=sectors[:3],
+        top_losers=sectors[-3:][::-1] if sectors else [],
+    )
