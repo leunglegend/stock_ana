@@ -14,7 +14,6 @@ import time
 
 from app.services import us_data, us_universe
 from app.services.stock_data import _get_ak
-from app.models.schemas import UsConstituent
 
 PROBE_TTL = 300.0      # 探测间隔（秒）
 MIN_AGE = 60.0         # 距上次刷新不足此值直接命中，不发探测
@@ -91,12 +90,16 @@ def get_us_snapshot(force: bool = False):
     decision = _decide_refresh(_cache, None, now, force)
     if decision == "sync_full":
         with _lock:
-            try:
-                _full_refresh()
-            except Exception as e:
-                print(f"[us缓存] 全量刷新失败: {e}")
-                if _cache["as_of"] is None:
-                    return None
+            # 锁内二次检查：坍塌冷启动并发羊群 —— 首个线程做全量重拉，
+            # 后续已在锁上排队的线程发现 as_of 已就绪（且非 force），
+            # 跳过刷新直接复用同一 memo 快照返回。
+            if force or _cache["as_of"] is None:
+                try:
+                    _full_refresh()
+                except Exception as e:
+                    print(f"[us缓存] 全量刷新失败: {e}")
+                    if _cache["as_of"] is None:
+                        return None
         return _snapshot()
     if decision == "probe":
         # 探测 as_of（1 个轻请求）。失败静默，保持缓存。
@@ -138,7 +141,7 @@ def _snapshot():
 
 
 class UsCacheSnapshot:
-    """线程快照值对象（不可变语义：返回副本）。"""
+    """线程快照值对象（构建时从 _cache 拷贝一次，此后命中共享同一实例；构建后不得再被修改）。"""
     __slots__ = ("indices", "sectors", "quote_map", "as_of", "updated_at")
 
     def __init__(self, indices, sectors, quote_map, as_of, updated_at):
