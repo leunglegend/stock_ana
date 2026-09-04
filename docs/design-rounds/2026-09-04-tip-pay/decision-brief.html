@@ -1,0 +1,349 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<title>股东增资表决</title>
+<style>
+  :root{
+    --bg:#f3f1eb; --surface:#fffdf8; --surface2:#ece9df; --inset:#e4e0d3;
+    --ink:#221f18; --ink2:#5d584a; --ink3:#8d8778;
+    --line:#dcd7c8; --line2:#c9c2ae;
+    --gold:#9a6a00; --gold-deep:#7a5200; --gold-bg:#f6e9c8; --gold-line:#d9bd7a;
+    --red:#b4342a; --red-bg:#f7e1dd; --green:#147a5a; --green-bg:#e2f1ea;
+    --focus:#9a6a00;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17150f; --surface:#201d15; --surface2:#2a261b; --inset:#332e21;
+      --ink:#ece7db; --ink2:#a9a294; --ink3:#6f6a5d;
+      --line:#3a352a; --line2:#4a4436;
+      --gold:#e5b24c; --gold-deep:#d8a33a; --gold-bg:#3a2f15; --gold-line:#6a5420;
+      --red:#e26254; --red-bg:#3a211d; --green:#49b98f; --green-bg:#14342a;
+      --focus:#e5b24c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17150f; --surface:#201d15; --surface2:#2a261b; --inset:#332e21;
+    --ink:#ece7db; --ink2:#a9a294; --ink3:#6f6a5d;
+    --line:#3a352a; --line2:#4a4436;
+    --gold:#e5b24c; --gold-deep:#d8a33a; --gold-bg:#3a2f15; --gold-line:#6a5420;
+    --red:#e26254; --red-bg:#3a211d; --green:#49b98f; --green-bg:#14342a;
+    --focus:#e5b24c;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1020px; margin:0 auto; padding:40px 24px 80px}
+  .eyebrow{
+    display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center;
+    font-size:12px; letter-spacing:.06em; color:var(--ink3); margin:0 0 10px;
+  }
+  .eyebrow .dot{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--gold)}
+  .eyebrow b{color:var(--ink2); font-weight:500}
+  h1{
+    font-family:"Noto Serif SC",serif; font-size:34px; line-height:1.25; font-weight:700;
+    text-wrap:balance; margin:0 0 6px; letter-spacing:.01em;
+  }
+  .lead{color:var(--ink2); font-size:15.5px; margin:0 0 4px; max-width:62ch}
+  .choicestrip{
+    margin-top:16px; padding:10px 14px; border:1px dashed var(--gold-line); border-radius:10px;
+    background:var(--gold-bg); color:var(--gold-deep); font-size:14px; font-weight:500;
+    display:none; align-items:center; gap:8px;
+  }
+  h1 .mini,.choicestrip{display:none}
+  .choicestrip.show{display:flex}
+
+  .premises{
+    margin:22px 0 0; display:flex; flex-wrap:wrap; gap:8px;
+  }
+  .chip{
+    border:1px solid var(--line); background:var(--surface); border-radius:999px;
+    padding:5px 12px; font-size:12.5px; color:var(--ink2);
+  }
+  .chip b{color:var(--ink); font-weight:500}
+  .chip.gold{border-color:var(--gold-line); background:var(--gold-bg); color:var(--gold-deep); font-weight:500}
+  .chip.red{border-color:#0000; background:var(--red-bg); color:var(--red)}
+
+  h2{
+    font-family:"Noto Serif SC",serif; font-size:19px; font-weight:700; margin:44px 0 14px;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  h2 .no{
+    font-family:"Noto Sans SC",sans-serif; font-size:12px; color:var(--gold); letter-spacing:.1em;
+    border:1px solid var(--gold-line); border-radius:6px; padding:1px 7px; align-self:center;
+  }
+  h2 .hint{font-family:"Noto Sans SC",sans-serif; font-size:12.5px; color:var(--ink3); font-weight:400}
+
+  .schemes{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; align-items:start}
+  .scheme{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:18px 18px 16px; display:flex; flex-direction:column; gap:12px;
+  }
+  .scheme.top{border-color:var(--gold-line); box-shadow:0 0 0 1px var(--gold-line)}
+  .shead{display:flex; justify-content:space-between; gap:8px; align-items:flex-start}
+  .sname{font-family:"Noto Serif SC",serif; font-size:17px; font-weight:700; line-height:1.3}
+  .stag{
+    flex:none; font-size:11.5px; border:1px solid var(--line2); color:var(--ink2);
+    border-radius:6px; padding:1px 7px; white-space:nowrap;
+  }
+  .stag.win{background:var(--red-bg); color:var(--red); border-color:#0000; font-weight:500}
+  .thesis{
+    font-family:"Noto Serif SC",serif; font-size:13.5px; line-height:1.65; color:var(--ink);
+    border-left:3px solid var(--gold); padding-left:10px; margin:0;
+  }
+  .flow{
+    background:var(--inset); border-radius:9px; padding:10px 11px;
+    font-size:12px; line-height:1.55; color:var(--ink2);
+  }
+  .flow .arr{color:var(--gold); margin:0 3px}
+  .copy{
+    border-radius:9px; padding:10px 12px; font-size:13px; line-height:1.6;
+  }
+  .copy.q{background:var(--gold-bg); border:1px solid var(--gold-line); color:var(--gold-deep)}
+  .copy .lbl{display:block; font-size:11px; letter-spacing:.08em; color:var(--ink3); margin-bottom:3px}
+  .copy.q .lbl{color:var(--gold)}
+  .facts{font-size:12px; color:var(--ink2); display:flex; flex-direction:column; gap:4px}
+  .facts div{display:flex; gap:6px}
+  .facts .k{flex:none; color:var(--ink3); width:52px}
+  .riskline{
+    font-size:12px; color:var(--green); background:var(--green-bg); border-radius:8px;
+    padding:8px 10px; line-height:1.5;
+  }
+  .riskline b{color:inherit}
+  .riskline.warn{color:var(--red); background:var(--red-bg)}
+  .scoretag{
+    margin-top:auto; font-size:12px; color:var(--ink3); display:flex; justify-content:space-between;
+    border-top:1px dashed var(--line); padding-top:8px;
+  }
+  .scoretag b{color:var(--gold-deep); font-family:"Noto Sans SC"; font-weight:700}
+
+  @media (max-width:820px){
+    .schemes{grid-template-columns:1fr}
+    h1{font-size:27px}
+  }
+
+  .scorewrap{overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:var(--surface)}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; min-width:680px}
+  th,td{padding:11px 14px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line)}
+  thead th{font-size:12px; letter-spacing:.06em; color:var(--ink3); font-weight:500; background:var(--surface2)}
+  thead th .sub{display:block; font-size:10.5px; letter-spacing:0; color:var(--ink3); font-weight:400; margin-top:1px}
+  tbody tr:last-child td{border-bottom:none}
+  td.name{white-space:nowrap}
+  td.name b{display:block; font-size:13.5px}
+  td.name span{font-size:11.5px; color:var(--ink3)}
+  .sc .n{font-variant-numeric:tabular-nums; font-weight:700; font-size:15px}
+  .sc.top .n{color:var(--red)}
+  .sc .p{font-size:11px; color:var(--ink3); margin-left:3px}
+  .sc.avg .n{color:var(--gold-deep); font-size:17px}
+  .bar{height:5px; background:var(--inset); border-radius:3px; overflow:hidden; margin-top:5px; min-width:120px}
+  .bar i{display:block; height:100%; background:var(--line2); border-radius:3px}
+  .sc.top .bar i{background:var(--gold)}
+  .sc.avg .bar i{background:var(--gold-deep)}
+  td.verdict{font-size:12.5px; color:var(--ink2); max-width:330px}
+
+  .verdicts{margin-top:14px; display:flex; flex-direction:column; gap:10px}
+  .vrow{display:grid; grid-template-columns:120px 1fr auto; gap:14px; align-items:start;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+  .vrole{font-weight:500; font-size:13px; line-height:1.4}
+  .vrole span{display:block; font-size:11.5px; color:var(--ink3); font-weight:400}
+  .vpick{white-space:nowrap; font-size:12px; border-radius:6px; padding:2px 8px; align-self:center}
+  .vpick.p1{background:var(--red-bg); color:var(--red); font-weight:500}
+  .vpick.p2{background:var(--gold-bg); color:var(--gold-deep)}
+  .vtext{font-size:13px; color:var(--ink2)}
+  @media (max-width:640px){.vrow{grid-template-columns:1fr}.vpick{justify-self:start}}
+
+  .must{display:flex; flex-direction:column; gap:10px}
+  .must .m{
+    display:flex; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; font-size:13.5px;
+  }
+  .must .m .t{font-family:"Noto Serif SC",serif; font-weight:700; flex:none; color:var(--red); font-size:15px; width:26px; text-align:center; line-height:1.4}
+  .must .m b{font-weight:500}
+  .must .m .src{display:block; font-size:11.5px; color:var(--ink3); margin-top:2px}
+
+  .paths{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  .path{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px;
+    cursor:pointer; position:relative; transition:border-color .12s, box-shadow .12s;
+  }
+  .path:hover{border-color:var(--line2)}
+  .path.pick{border-color:var(--gold-deep); box-shadow:0 0 0 1px var(--gold-deep), 0 6px 18px -12px var(--gold)}
+  .path .lbl{font-family:"Noto Serif SC",serif; font-weight:700; font-size:15.5px; display:block; margin-bottom:3px}
+  .path .rec{font-size:10.5px; letter-spacing:.06em; color:var(--red); border:1px solid var(--red); border-radius:5px; padding:0 6px; margin-left:6px; vertical-align:1px}
+  .path p{font-size:12.8px; color:var(--ink2); margin:8px 0 0; line-height:1.6}
+  .path .radio{
+    position:absolute; top:14px; right:14px; width:16px; height:16px; border-radius:50%;
+    border:1.5px solid var(--line2);
+  }
+  .path.pick .radio{border-color:var(--gold-deep)}
+  .path.pick .radio::after{content:""; position:absolute; inset:3px; border-radius:50%; background:var(--gold-deep)}
+  @media (max-width:820px){.paths{grid-template-columns:1fr}}
+
+  .fin{margin-top:18px; font-size:12.5px; color:var(--ink3)}
+  .fin code{background:var(--inset); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:11.5px}
+  :focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+  a{color:var(--gold-deep)}
+  a:visited{color:var(--gold-deep)}
+</style>
+
+<div class="wrap">
+
+  <div class="eyebrow"><span class="dot"></span> 设计决策轮 · 2026-09-04 · 打赏入口 <b>· 只出方案不写码</b></div>
+  <h1>股东增资表决</h1>
+  <p class="lead">给「析股研究台」的 AI 打工仔设计一个要钱的入口——<b>不承诺收益、不骚扰、不吃相难看</b>。作者是发行人,你是唯一股东。三套方案、三名评审已打分,请拍板。</p>
+  <div class="choicestrip" id="strip">已记录你的倾向:<b id="stripval"></b><span style="margin-left:auto; opacity:.75" id="clearx" role="button" tabindex="0">清除</span></div>
+
+  <div class="premises">
+    <span class="chip gold">锁定 · 股东情怀文案(适度)</span>
+    <span class="chip gold">锁定 · 入口全站常驻(顶栏/页脚)</span>
+    <span class="chip gold">锁定 · 微信 + 支付宝个人收款码</span>
+    <span class="chip">零资金流 · 无到账检测 · 不伪造支付成功</span>
+    <span class="chip">红线 · 不承诺收益 / 不诱导未成年 / 不为个股背书</span>
+  </div>
+
+  <h2><span class="no">壹</span> 三套候选方案 <span class="hint">红涨绿跌语境 · 金=增资/Coin</span></h2>
+  <div class="schemes">
+
+    <div class="scheme">
+      <div class="shead"><div class="sname">方向一<br>页脚 · 静默增资</div><span class="stag">最克制</span></div>
+      <p class="thesis">页脚放一句与免责声明同级的小字——点开才知道是一次不上市的「A 轮融资」。</p>
+      <div class="flow"><span>页脚「股东可顺手增资 ↗」</span><span class="arr">→</span><span>A轮(不上市)融资面板</span><span class="arr">→</span><span>双码 · 金额随缘</span><span class="arr">→</span><span>关闭即静默</span></div>
+      <div class="copy q"><span class="lbl">代表文案 · 面板主句</span>「本台 A 轮融资开放——本轮唯一股东:你。」</div>
+      <div class="facts">
+        <div><span class="k">现状</span><span>全站没有页脚——这版先补一个真的,再把合规声明铺到全站</span></div>
+        <div><span class="k">防打扰</span><span>零主动·零状态·零红点·关闭即静默</span></div>
+        <div><span class="k">技术面</span><span>SiteFooter + TipDialog + Layout 微调,~0.5 人日</span></div>
+      </div>
+      <div class="riskline">评审共识:入口≈隐形(发现率最低),作为变现"不运转";但<b>补全站合规页脚</b>这件事三人都点名该抄走。</div>
+      <div class="scoretag"><span>归一化均值</span><b>63%</b></div>
+    </div>
+
+    <div class="scheme">
+      <div class="shead"><div class="sname">方向二<br>顶栏 · 信仰充值</div><span class="stag">显性自克制</span></div>
+      <p class="thesis">顶栏右簇一枚描边金色胶囊「信仰充值」——点开过的人,自动降成一枚安静的小图标。</p>
+      <div class="flow"><span>顶栏金色胶囊</span><span class="arr">→</span><span>股东专线打赏卡</span><span class="arr">→</span><span>双码+「下次一定/收起30天」</span><span class="arr">→</span><span>点开≥1次自动降图标</span></div>
+      <div class="copy q"><span class="lbl">代表文案 · 面板主句</span>「给『析股研究台』充点信仰,行情绿了我们也不慌。」</div>
+      <div class="facts">
+        <div><span class="k">防打扰</span><span>三级状态机:胶囊→纯图标→30天隐身(localStorage 一键)</span></div>
+        <div><span class="k">技术面</span><span>CommandBar 插一行 + 2 新组件 + 状态文件,改动最省</span></div>
+      </div>
+      <div class="riskline warn">评审点名:<b>「充值胶囊」把"这站是收费内容站"怼到用户脸上,拿公信力换曝光</b>;致谢文案「作者在后台会看到每笔增资」踩"伪到账"红线(无后台),必须改。</div>
+      <div class="scoretag"><span>归一化均值</span><b>66%</b></div>
+    </div>
+
+    <div class="scheme top">
+      <div class="shead"><div class="sname">方向三<br>点赞为股 · 两段式</div><span class="stag win">三方共识首推</span></div>
+      <p class="thesis">先免费点赞「投一票」,把打赏重新说成一句「顺带增资?」——不逼捐,白嫖也是股东权益。</p>
+      <div class="flow"><span>◎点赞点亮(金)</span><span class="arr">→</span><span>确认卡「表决成功·名册+1」</span><span class="arr">→</span><span>「顺带增资?」</span><span class="arr">→</span><span>打赏卡双码</span></div>
+      <div class="copy q"><span class="lbl">代表文案</span>「你持股『鼓励』1股,行权价 0 元,不盯盘、不套牢。」 / 拒绝出口「先不了,白嫖也是股东权益。」</div>
+      <div class="facts">
+        <div><span class="k">防打扰</span><span>邀请只在"刚点赞"后,终身3次/日1次/可永久关闭——机制性不骚扰</span></div>
+        <div><span class="k">诚实</span><span>UI 永不显示"N人已赞";点赞存本机;真实到账才是唯一真数</span></div>
+        <div><span class="k">技术面</span><span>SupportButton + 打赏卡 + support store,~500–650 行,零后端</span></div>
+      </div>
+      <div class="riskline">作者端代价:<b>今天连"点赞量"都拿不到(数据回报≈0)</b>;金色点亮与"自选已收藏"撞色,需先拍视觉区隔。</div>
+      <div class="scoretag"><span>归一化均值</span><b>77% · 最高</b></div>
+    </div>
+
+  </div>
+
+  <h2><span class="no">贰</span> 三方评审打分 <span class="hint">口径:体验官60 · 年轻股民60 · 专业投资50</span></h2>
+  <div class="scorewrap">
+    <table>
+      <thead><tr>
+        <th>评审角色</th><th>方向一 · 页脚静默</th><th>方向二 · 顶栏充值</th><th>方向三 · 点赞两段</th><th>一句话结论</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td class="name"><b>体验官 ux</b><span>可发现/步数/一致性/边界反馈</span></td>
+          <td class="sc"><span class="n">38</span><span class="p">/60 · 63%</span><span class="bar"><i style="width:63%"></i></span></td>
+          <td class="sc top"><span class="n">45</span><span class="p">/60 · 75%</span><span class="bar"><i style="width:75%"></i></span></td>
+          <td class="sc"><span class="n">44</span><span class="p">/60 · 73%</span><span class="bar"><i style="width:73%"></i></span></td>
+          <td class="verdict">方向一"不可运转",但补页脚应拆出来并入任何方案;给的是<b>合并版建议</b>(三骨架+二状态机+一页脚)。</td>
+        </tr>
+        <tr>
+          <td class="name"><b>年轻股民 genz</b><span>吃相/移动端/话题感</span></td>
+          <td class="sc"><span class="n">33</span><span class="p">/60 · 55%</span><span class="bar"><i style="width:55%"></i></span></td>
+          <td class="sc"><span class="n">37</span><span class="p">/60 · 62%</span><span class="bar"><i style="width:62%"></i></span></td>
+          <td class="sc top"><span class="n">47</span><span class="p">/60 · 78%</span><span class="bar"><i style="width:78%"></i></span></td>
+          <td class="verdict">只选方向三——文案是唯一"真想甩进炒股群"的;方向二最油、像"老网站赞助横幅"。</td>
+        </tr>
+        <tr>
+          <td class="name"><b>专业投资 pro</b><span>公信力/诚实/合规/扩展</span></td>
+          <td class="sc"><span class="n">35</span><span class="p">/50 · 70%</span><span class="bar"><i style="width:70%"></i></span></td>
+          <td class="sc"><span class="n">31</span><span class="p">/50 · 62%</span><span class="bar"><i style="width:62%"></i></span></td>
+          <td class="sc top"><span class="n">39</span><span class="p">/50 · 78%</span><span class="bar"><i style="width:78%"></i></span></td>
+          <td class="verdict">方向三专业上最站得住(诚实边界+合规最严);方向一"无伤冠军"单独立不住;方向二=拿公信力换曝光。</td>
+        </tr>
+        <tr>
+          <td class="name"><b>归一化均值</b><span>三评审等权</span></td>
+          <td class="sc avg"><span class="n">63%</span><span class="bar"><i style="width:63%"></i></span></td>
+          <td class="sc avg"><span class="n">66%</span><span class="bar"><i style="width:66%"></i></span></td>
+          <td class="sc avg"><span class="n">77%</span><span class="bar"><i style="width:77%"></i></span></td>
+          <td class="verdict" style="color:var(--red); font-weight:500">共识:方向三为骨架;方向二机制值得抄、载体放错;方向一页脚做独立合规改造。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="verdicts">
+    <div class="vrow"><div class="vrole">体验官 ux-reviewer<span>交互/易用/一致性</span></div><div class="vpick p2">推荐合并版</div><div class="vtext">三≈二&gt;一。把方向三当骨架,吸收方向二的"降级/隐身"状态机,方向一页脚单独立项做合规;合并前先定金色区隔与双浮层焦点。</div></div>
+    <div class="vrow"><div class="vrole">年轻股民 genz-reviewer<span>2020s 吃相</span></div><div class="vpick p1">只选方向三</div><div class="vtext">方向三是唯一"先给我东西再开口"的;方向二把"要钱"放进顶栏最贵的热区还梗库存偏老,最油;方向一体面但等于没有。建议顺手补方向一页脚。</div></div>
+    <div class="vrow"><div class="vrole">专业投资 pro-investor-reviewer<span>公信力/合规/诚实</span></div><div class="vpick p1">选方向三</div><div class="vtext">只有它"钱和信任能兼得":不污染数据、不越合规线、不羞辱白嫖用户、不把要钱暴露在工作区。方向二致谢文案必须改(踩伪到账红线)。</div></div>
+  </div>
+
+  <h2><span class="no">叁</span> 动工前必须拍板的点 <span class="hint">评审点名,不解决会返工</span></h2>
+  <div class="must">
+    <div class="m"><span class="t">1</span><div><b>点赞金色 vs 「加入自选已收藏」金色撞色</b>——用户会把"我赞过"记成"我收藏过"。需定专属点亮形(实心拇指 + 区隔色/角标),或起独立色别名。三方评审都点名,是合并版唯一必须先定的硬伤。<span class="src">ux / genz / pro 一致</span></div></div>
+    <div class="m"><span class="t">2</span><div><b>删掉「作者在后台会看到每一笔增资」</b>——本产品没有后台、没有到账检测,这句话让用户以为存在一个假的站方记账系统。改成指向真实收款渠道(如"每一笔增资都会出现在作者的微信/支付宝收款记录里")。<span class="src">pro(强烈) / ux</span></div></div>
+    <div class="m"><span class="t">3</span><div><b>把方向一"补全站合规页脚"当独立小改造先做</b>——「数据仅供参考、不构成投资建议」现在只藏在登录框里,这是当前最真实的公信力欠账,比打赏入口本身更该修。若走合并版,页脚再留一行安静的长尾入口即可。<span class="src">pro / ux / genz 一致</span></div></div>
+    <div class="m"><span class="t">4</span><div><b>两处文案权重倒挂</b>——方向一「非公开募股 / A 轮融资」是全站最像证券发行的玩笑,却配了最轻的小字(降级为"内部轮"这类更轻的梗);方向三「作者会挑个交易日默默说谢谢」对匿名扫码无法归因,改集体致谢。<span class="src">pro / ux</span></div></div>
+    <div class="m"><span class="t">5</span><div><b>移动端双浮层 + 已点亮按钮行为钉死</b>——确认卡 popover 与打赏卡 dialog 的开关顺序/焦点归还需真机验证;已点亮按钮点击=回确认卡(含撤回),绝不直接弹打赏卡,避免老用户被动撞见要钱。<span class="src">ux</span></div></div>
+  </div>
+
+  <h2><span class="no">肆</span> 拍板路径 <span class="hint">点一下,我的倾向就记在你这个浏览器里</span></h2>
+  <div class="paths" id="paths">
+    <div class="path" data-k="合并版(推荐)">
+      <div class="radio" aria-hidden="true"></div>
+      <span class="lbl">A · 合并版<span class="rec">推荐</span></span>
+      <p>以<b>方向三 点赞为股</b>为骨架;吸收<b>方向二的"点开降级 + 30 天隐身"状态机</b>;把<b>方向一合规页脚</b>作独立改造先落地,页脚留一行安静的长尾入口。先拍点 1 的金色区隔。</p>
+    </div>
+    <div class="path" data-k="先做方向三">
+      <div class="radio" aria-hidden="true"></div>
+      <span class="lbl">B · 最小上方向三</span>
+      <p>只做<b>点赞点亮 + 「顺带增资?」+ 双码打赏卡</b>最小闭环;状态机与合规页脚列入二期。改动最省的"先能运转"版本。</p>
+    </div>
+    <div class="path" data-k="先补合规页脚">
+      <div class="radio" aria-hidden="true"></div>
+      <span class="lbl">C · 先补页脚再谈打赏</span>
+      <p>把<b>方向一的站级合规页脚</b>(免责声明落到全站)当独立小改造先做;打赏入口(以方向三骨架)排二期再开工。</p>
+    </div>
+  </div>
+  <p class="fin">选定后直接在对话里告诉我(如:"选 A 合并版")。我会先解决第 1 项金色区隔,再用 superpowers:writing-plans 写实施计划,<code>新建分支</code>开发、不碰 main;方案留档于 <code>docs/design-rounds/2026-09-04-tip-pay/</code>。</p>
+
+</div>
+
+<script>
+  (function(){
+    var KEY='tippay_decision_v1', strip=document.getElementById('strip'),
+        stripval=document.getElementById('stripval'), clearx=document.getElementById('clearx'),
+        paths=document.getElementById('paths');
+    var cards=[].slice.call(paths.querySelectorAll('.path'));
+    function clearPick(){cards.forEach(function(c){c.classList.remove('pick')});}
+    function setText(v){strip.classList.add('show'); stripval.textContent=v;}
+    function setPick(k){clearPick(); var hit=cards.filter(function(c){return c.dataset.k===k})[0]; if(hit)hit.classList.add('pick');}
+    try{
+      var saved=localStorage.getItem(KEY);
+      if(saved){setPick(saved); setText(saved);}
+    }catch(e){}
+    cards.forEach(function(c){
+      c.addEventListener('click',function(){
+        var k=c.dataset.k; clearPick(); c.classList.add('pick'); setText(k);
+        try{localStorage.setItem(KEY,k);}catch(e){}
+      });
+    });
+    function clearAll(){clearPick(); try{localStorage.removeItem(KEY);}catch(e){} strip.classList.remove('show');}
+    clearx.addEventListener('click',clearAll);
+    clearx.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();clearAll();}});
+  })();
+</script>
