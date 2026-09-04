@@ -4,12 +4,35 @@
 交易日完整日量），天然是"最近已入库交易日收盘"口径 —— 与美股页"收盘
 复盘"定位一致。板块聚合依赖静态成分表（us_universe）。
 """
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from app.models.schemas import UsConstituent, UsIndexQuote, UsSector, UsSummary
 from app.services import stock_data, us_universe
+
+# py_mini_racer（akshare 新浪美股接口内部用来跑 JS 解密的 V8 引擎）在多线程
+# 下首次并发初始化地址池会 native 崩溃（实测 2 线程即 SIGTRAP）。在并发拉取
+# 前先单线程预热一次，让 V8 完成初始化，此后线程池并发才安全。预热一次即可。
+_warm_lock = threading.Lock()
+_v8_warmed = False
+
+
+def _ensure_v8_warm(ak):
+    """并发调用前单线程预热 V8（进程内只做一次）。失败静默，后续仍会重试。"""
+    global _v8_warmed
+    if _v8_warmed:
+        return
+    with _warm_lock:
+        if _v8_warmed:
+            return
+        try:
+            # 任选一个新浪美股接口单线程跑一次即可触发 py_mini_racer 初始化
+            ak.index_us_stock_sina(symbol=".DJI")
+            _v8_warmed = True
+        except Exception as e:
+            print(f"[us] V8 预热失败（下次并发前将重试）: {e}")
 
 # (新浪代码, 展示 symbol, 中文名)；前 3 为 3 大指数，路由取 .DJI/.INX/.IXIC
 US_INDEX_SYMBOLS = (
@@ -45,6 +68,7 @@ def _frame_latest(frame):
 def fetch_index_quotes(ak=None) -> list:
     """拉 5 个美股指数的收盘涨跌（单指数失败跳过，不拖垮整体）。"""
     ak = ak or stock_data._get_ak()
+    _ensure_v8_warm(ak)
     quotes = []
     for code, symbol, cn in US_INDEX_SYMBOLS:
         try:
@@ -109,6 +133,7 @@ def fetch_constituent_quotes(members, ak=None, max_workers=16) -> tuple:
     美东交易日；避免个别停牌/退市股把日期带偏）。整体失败返回 ([], None)。
     """
     ak = ak or stock_data._get_ak()
+    _ensure_v8_warm(ak)
     quotes, dates = [], []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {ex.submit(_fetch_single, m, ak): m.symbol for m in members}

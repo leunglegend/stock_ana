@@ -134,6 +134,57 @@ class ConstituentFetchTest(unittest.TestCase):
         self.assertEqual(as_of, "2026-09-02")
 
 
+class WarmupGuardTest(unittest.TestCase):
+    """V8 预热防护：akshare 新浪美股接口内部用 py_mini_racer（V8）做 JS 解密，
+    多线程首次并发初始化会 native 崩溃。fetch_* 必须在进线程池前先单线程预热一次。
+    本类用 fake 验证「预热恰在并发拉取前、且进程内只执行一次」的契约。
+    """
+
+    def setUp(self):
+        # 重置模块级预热标志，模拟冷启动
+        us_data._v8_warmed = False
+
+    def test_constituent_fetch_warms_before_pool_once(self):
+        calls = []
+
+        class Recording(FakeDailyAkshare):
+            def index_us_stock_sina(self, symbol):
+                calls.append(("index", symbol))
+                return super().index_us_stock_sina(symbol)
+
+            def stock_us_daily(self, symbol, adjust=""):
+                calls.append(("daily", symbol))
+                return super().stock_us_daily(symbol, adjust)
+
+        from app.services.us_universe import UsUniverseMember
+        members = [UsUniverseMember("AAPL", "Apple", "Information Technology"),
+                   UsUniverseMember("MSFT", "Microsoft", "Information Technology")]
+        fetch_constituent_quotes(members, ak=Recording())
+
+        # 预热：进线程池前单线程跑一次 .DJI；随后才是并发成分拉取
+        self.assertEqual(calls[0], ("index", ".DJI"))
+        self.assertIn(("daily", "AAPL"), calls)
+        self.assertIn(("daily", "MSFT"), calls)
+        # 预热恰好一次
+        self.assertEqual(calls.count(("index", ".DJI")), 1)
+
+    def test_warm_is_process_once_not_per_call(self):
+        from app.services.us_universe import UsUniverseMember
+        members = [UsUniverseMember("AAPL", "Apple", "Information Technology")]
+
+        warm_calls = []
+
+        class Counting(FakeDailyAkshare):
+            def index_us_stock_sina(self, symbol):
+                warm_calls.append(symbol)
+                return super().index_us_stock_sina(symbol)
+
+        fetch_constituent_quotes(members, ak=Counting())
+        fetch_constituent_quotes(members, ak=Counting())
+        # 两次全量拉取只预热一次
+        self.assertEqual(len(warm_calls), 1)
+
+
 from app.services import us_data
 from app.services.us_data import (
     aggregate_sectors, compose_summary, sector_constituents,
