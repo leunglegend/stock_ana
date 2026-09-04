@@ -895,7 +895,7 @@ git commit -m "feat(tip): 站级合规页脚 + 静默增资入口,Layout 接 sti
           />
           <div v-else class="qr-card__placeholder" role="img" aria-label="收款码待作者上传">
             <span>{{ side.label }}收款码</span>
-            <small>作者将码图放入 src/assets/support/<br />并在 qrImages.js 接线后显示</small>
+            <small>{{ SUPPORT_COPY.qrPlaceholder }}</small>
           </div>
         </figure>
       </div>
