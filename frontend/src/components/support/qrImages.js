@@ -1,11 +1,10 @@
-// 作者接入个人收款码的唯一改点:
-//   1) 把码图另存为 src/assets/support/wechat.png 与 alipay.png;
-//   2) 取消下面两行 import 并把 QR_IMAGES.wechat / .alipay 指向它们。
-// 当前保持 null:组件渲染占位卡,避免缺失图片导致 vite build 失败。
-// import wechatImg from '@/assets/support/wechat.png'
-// import alipayImg from '@/assets/support/alipay.png'
+// 个人收款码接线点:微信「二维码收款」/ 支付宝「收钱」导出的码图存于
+// src/assets/support/。经 Vite import 处理为资源 URL;组件在有值时渲染真码,
+// 保持 null 则渲染占位卡。
+import wechatQr from '@/assets/support/wechat-qr.jpg'
+import alipayQr from '@/assets/support/alipay-qr.jpg'
 
 export const QR_IMAGES = {
-  wechat: null,
-  alipay: null,
+  wechat: wechatQr,
+  alipay: alipayQr,
 }
