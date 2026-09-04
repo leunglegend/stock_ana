@@ -21,6 +21,7 @@
 
     <div class="command-bar__right">
       <NotificationBell />
+      <SupportButton />
       <CommandBarUtilities />
     </div>
   </header>
@@ -32,6 +33,7 @@ import { Expand } from '@element-plus/icons-vue'
 
 import NotificationBell from '../NotificationBell.vue'
 import CommandBarUtilities from './CommandBarUtilities.vue'
+import SupportButton from './SupportButton.vue'
 
 const props = defineProps({
   showMenuButton: { type: Boolean, default: false },

@@ -74,3 +74,10 @@ test('SiteFooter 只放免责 + 一条静默增资入口,不动声量', () => {
   const counts = (re) => (footerSource.match(re) || []).length
   assert.equal(counts(/SUPPORT_COPY\.footerTipEntry/g), 1, '页脚只有一个静默入口引用')
 })
+
+const commandBarSource = await readFile(new URL('../src/components/app/CommandBar.vue', import.meta.url), 'utf8')
+
+test('CommandBar 右簇接入 SupportButton', () => {
+  assert.match(commandBarSource, /import\s+SupportButton\s+from\s+['"].*SupportButton\.vue['"]/)
+  assert.match(commandBarSource, /<SupportButton\s*\/?>/)
+})
