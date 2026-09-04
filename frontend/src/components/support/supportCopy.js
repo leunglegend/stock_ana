@@ -4,6 +4,7 @@
 export const SUPPORT_COPY = {
   // —— 顶栏入口 ——
   entryAriaLabel: '给析股研究台点赞',
+  entryAriaLiked: '已为本机股东点赞,再点开股东卡',
   entryTitleIdle: '点赞:免费给研究台投一票,不伤本金',
   entryTitleLiked: '你已是本机股东 · 再点开股东卡',
   labelIdle: '点赞',
@@ -19,7 +20,6 @@ export const SUPPORT_COPY = {
   revokeAction: '收回这一票',
   suppressAction: '以后别再提增资',
   snoozeAction: '暂时收起这个入口',
-  revokeNote: '票已收回,研究台照常营业,欢迎随时再投。',
   // —— 打赏卡 ——
   dialogEyebrow: '股东增资 · 自愿支持',
   dialogHead: '研究不收费,服务器要养;各位股东,量力增资。',

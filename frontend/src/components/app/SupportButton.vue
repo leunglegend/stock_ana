@@ -5,6 +5,7 @@
       class="support-btn"
       :class="{ 'support-btn--liked': supportStore.liked }"
       :aria-pressed="supportStore.liked"
+      :aria-label="buttonAriaLabel"
       :title="supportStore.liked ? SUPPORT_COPY.entryTitleLiked : SUPPORT_COPY.entryTitleIdle"
       @click="handleToggle"
     >
@@ -71,7 +72,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useResponsive } from '@/composables/useResponsive'
 import { useSupportStore } from '@/store/support'
 import { SUPPORT_COPY } from '../support/supportCopy'
@@ -84,6 +85,12 @@ const { isDesktop } = useResponsive()
 const panelOpen = ref(false)
 const bigInvite = ref(false)        // 刚点亮且拿到自动配额 → 大号「顺带增资?」
 const showGhostInvite = ref(false)  // 手动进卡 / 配额耗尽 → 小号幽灵入口
+
+// 读屏名:图标态(<1024,文字标签隐藏)必给;桌面态由可见文字充当 accessible name
+const buttonAriaLabel = computed(() => {
+  if (isDesktop.value) return undefined
+  return supportStore.liked ? SUPPORT_COPY.entryAriaLiked : SUPPORT_COPY.entryAriaLabel
+})
 
 function onKeydown(e) {
   if (e.key === 'Escape') closePanel()
