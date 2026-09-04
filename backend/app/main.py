@@ -14,6 +14,7 @@ from app.database import Base, engine
 from app.models import User, WatchlistGroup, WatchlistItem, DailyReport, StockReport, Notification  # noqa: F401  确保模型被导入以建表
 from app.routes.stock import router as stock_router
 from app.routes.board import router as board_router
+from app.routes.us import router as us_router
 from app.routes.auth import router as auth_router
 from app.routes.watchlist import router as watchlist_router
 from app.routes.notification import router as notification_router
@@ -40,6 +41,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 # 注册路由
 app.include_router(stock_router)
 app.include_router(board_router)
+app.include_router(us_router)
 app.include_router(auth_router)
 app.include_router(watchlist_router)
 app.include_router(notification_router)

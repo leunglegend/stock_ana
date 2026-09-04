@@ -32,6 +32,7 @@ function isActive(item) {
   if (item.id === 'reports') return route.path === '/reports'
   if (item.id === 'report-detail') return route.path.startsWith('/reports/')
   if (item.id === 'stock') return route.path.startsWith('/stock/')
+  if (item.id === 'us') return route.path === '/us' || route.path.startsWith('/us/')
   return route.path === item.path
 }
 </script>

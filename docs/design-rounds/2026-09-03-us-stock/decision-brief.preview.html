@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>美股首版选型</title>
+<style>
+  /* ============ tokens ============ */
+  :root{
+    --bg:#eceef1;
+    --surface:#ffffff;
+    --surface2:#f6f7f8;
+    --ink:#14171b;
+    --muted:#59626e;
+    --line:#dde1e6;
+    --line2:#c9cfd6;
+    --red:#bf3b2b;
+    --redbg:#f6e3df;
+    --green:#1e8a60;
+    --greenbg:#ddf0e7;
+    --ux:#35688f;
+    --genz:#c2761a;
+    --pro:#6a54a1;
+    --shadow:0 1px 2px rgba(20,23,27,.05), 0 10px 30px -18px rgba(20,23,27,.25);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1114;
+      --surface:#171a1f;
+      --surface2:#1e2229;
+      --ink:#eceef1;
+      --muted:#98a1ac;
+      --line:#292f37;
+      --line2:#39414b;
+      --red:#ef6a54;
+      --redbg:#3a211c;
+      --green:#3fbc8c;
+      --greenbg:#14322a;
+      --ux:#5f9bc4;
+      --genz:#e8a23f;
+      --pro:#a58ad4;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 36px -20px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1114;
+    --surface:#171a1f;
+    --surface2:#1e2229;
+    --ink:#eceef1;
+    --muted:#98a1ac;
+    --line:#292f37;
+    --line2:#39414b;
+    --red:#ef6a54;
+    --redbg:#3a211c;
+    --green:#3fbc8c;
+    --greenbg:#14322a;
+    --ux:#5f9bc4;
+    --genz:#e8a23f;
+    --pro:#a58ad4;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 36px -20px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 24px 96px}
+
+  /* ============ type ============ */
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  h1{font-family:"Noto Serif SC",Georgia,"Songti SC",serif;font-weight:900;
+    font-size:clamp(30px,5vw,46px);line-height:1.2;margin:14px 0 0;text-wrap:balance}
+  .lede{font-size:16px;color:var(--muted);max-width:62ch;margin:18px 0 0}
+  h2{font-family:"Noto Serif SC",Georgia,"Songti SC",serif;font-weight:700;font-size:clamp(20px,2.4vw,26px);margin:0;text-wrap:balance}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin:64px 0 22px}
+  .sec-head .n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);letter-spacing:.05em}
+  .sec-head .line{flex:1;height:1px;background:var(--line)}
+  .small{font-size:13px;color:var(--muted)}
+
+  /* header */
+  .deck{max-width:980px}
+  .fixedbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:30px}
+  .pill{font-size:12.5px;padding:5px 12px;border:1px solid var(--line2);border-radius:999px;color:var(--muted);background:var(--surface)}
+  .pill b{color:var(--ink);font-weight:600}
+  .pill.up{color:var(--red);border-color:var(--red);background:var(--redbg)}
+  .pill.down{color:var(--green);border-color:var(--green);background:var(--greenbg)}
+
+  /* ============ cards / panels ============ */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+  .panel .inner{padding:22px 24px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+
+  /* candidate profile */
+  .cand-tag{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .cand-tag .box{width:10px;height:10px;border-radius:3px}
+  .A .cand-tag .box{background:var(--ux)}
+  .B .cand-tag .box{background:var(--genz)}
+  .cand h3{font-family:"Noto Serif SC",Georgia,"Songti SC",serif;font-weight:700;font-size:22px;margin:6px 0 4px}
+  .tagline{font-size:14px;color:var(--muted);margin:0 0 16px}
+  .pull{font-family:"Noto Serif SC",Georgia,"Songti SC",serif;font-style:italic;color:var(--muted);
+    font-size:14px;border-left:3px solid var(--line2);padding-left:12px;margin:0 0 18px}
+
+  /* mock quote / table */
+  .mock{border:1px dashed var(--line2);border-radius:10px;padding:12px 14px;background:var(--surface2);margin:0 0 16px;font-size:13px}
+  .mock .cap{font-size:11px;color:var(--muted);letter-spacing:.06em;margin-bottom:6px}
+  .mock .line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 0}
+  .mock .line .g{font-weight:600}
+  .mock .up{color:var(--red);font-variant-numeric:tabular-nums}
+  .mock .down{color:var(--green);font-variant-numeric:tabular-nums}
+  .mock .sector-sub{font-size:11.5px;color:var(--muted)}
+
+  /* score rows */
+  .scores{margin-top:16px}
+  .srow{display:grid;grid-template-columns:64px 1fr 46px;align-items:center;gap:12px;margin:8px 0}
+  .srow .who{font-size:12.5px;color:var(--muted)}
+  .srow .track{height:7px;border-radius:4px;background:var(--surface2);overflow:hidden;border:1px solid var(--line)}
+  .srow .fill{height:100%;border-radius:4px}
+  .srow .num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;font-weight:600;text-align:right;color:var(--ink)}
+  .srow .num span{color:var(--muted);font-weight:400;font-size:11px}
+  .f-ux{background:var(--ux)} .f-genz{background:var(--genz)} .f-pro{background:var(--pro)}
+  .c-ux{color:var(--ux)} .c-genz{color:var(--genz)} .c-pro{color:var(--pro)}
+  .tot{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+  .tot .lab{font-size:12px;color:var(--muted)}
+  .tot .big{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:20px;font-weight:600}
+  .tot .big small{font-size:12px;color:var(--muted);font-weight:400}
+
+  /* verdict strips */
+  .verdict{display:grid;grid-template-columns:150px 1fr auto;gap:16px;align-items:start;padding:16px 18px;margin:0 0 10px;border-left:4px solid var(--line2)}
+  .verdict.ux{border-left-color:var(--ux)} .verdict.genz{border-left-color:var(--genz)} .verdict.pro{border-left-color:var(--pro)}
+  @media(max-width:720px){.verdict{grid-template-columns:1fr}.verdict .pickrow{text-align:left}}
+  .verdict .role{font-size:12px;letter-spacing:.08em;font-weight:600;color:var(--muted)}
+  .verdict .role .big{display:block;font-size:15px;color:var(--ink);margin-top:2px;letter-spacing:0}
+  .verdict .stance{font-size:14px}
+  .verdict .pickrow{text-align:right;white-space:nowrap}
+  .choicechip{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);color:var(--ink);background:var(--surface2);font-weight:600}
+  .choicechip .dot{width:8px;height:8px;border-radius:50%}
+  .dot.ux{background:var(--ux)} .dot.genz{background:var(--genz)} .dot.pro{background:var(--pro)}
+  .choicechip.pickA .dot{background:var(--ux)} .choicechip.pickB .dot{background:var(--genz)}
+
+  /* consensus fixes */
+  .fixlist{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  @media(max-width:760px){.fixlist{grid-template-columns:1fr}}
+  .fix{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--surface)}
+  .fix .h{font-weight:600;font-size:14.5px;display:flex;gap:9px;align-items:baseline}
+  .fix .h .tag{font-size:10.5px;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line2);padding:1px 7px;border-radius:999px;flex:none}
+  .fix p{margin:7px 0 0;font-size:13.5px;color:var(--muted)}
+
+  /* directions */
+  .dir{position:relative}
+  .dir .who{font-size:11.5px;letter-spacing:.1em;font-weight:600;color:var(--muted);text-transform:uppercase}
+  .dir h3{font-size:17px;margin:6px 0 8px}
+  .dir p{font-size:14px;color:var(--muted);margin:0 0 12px}
+  .dir ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink)}
+  .dir li{margin:4px 0}
+  .dir .rec{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .tick{color:var(--green);font-weight:700}
+
+  /* cta */
+  .ask{margin-top:60px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow)}
+  .ask h2{margin:0 0 6px}
+  .ask .opts{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .opt{font-size:14px;padding:10px 16px;border-radius:10px;border:1px solid var(--line2);background:var(--surface2);color:var(--ink);font-weight:600;cursor:pointer;transition:.15s}
+  .opt:hover{border-color:var(--ink);transform:translateY(-1px)}
+  .opt span{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}
+
+  .foot{margin-top:44px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px;
+    display:flex;flex-wrap:wrap;gap:6px 18px}
+  .foot b{color:var(--ink);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+  @media (prefers-reduced-motion: no-preference){
+    .fill{transform-origin:left;animation:grow .9s cubic-bezier(.2,.7,.2,1) both}
+    @keyframes grow{from{transform:scaleX(0)}}
+  }
+</style></head>
+<body>
+
+<div class="wrap">
+
+  <header class="deck">
+    <div class="eyebrow">智能股票平台 · 美股能力 · 设计决策轮</div>
+    <h1>美股首版，选哪副面孔？</h1>
+    <p class="lede">数据层已敲定：新浪指数日线 + 标普500 成分等权聚合成 11 个 GICS 板块，按美东交易日每日收盘刷新一次。剩下的选择是<strong>页面形态</strong>。三位评审已给两套原始方案打完分，结论并不一致——这正是值得你亲自拍板的地方。</p>
+    <div class="fixedbar">
+      <span class="pill">数据层 <b>方案 B</b>（已定）</span>
+      <span class="pill up">红涨</span><span class="pill down">绿跌</span>
+      <span class="pill">沿用平台语义 · 标注「美股收盘」</span>
+    </div>
+  </header>
+
+  <!-- ======= 01 方案档案 ======= -->
+  <div class="sec-head">
+    <span class="n">01</span><h2>两套原始方案，三方给分</h2><span class="line"></span>
+  </div>
+  <div class="grid2">
+
+    <!-- 方案甲 -->
+    <div class="panel cand A">
+      <div class="inner">
+        <span class="cand-tag"><span class="box"></span>方案甲 · 完整板块工作台</span>
+        <h3>把 A 股板块监控的语法搬过来</h3>
+        <p class="tagline">左列表右详情、领涨/领跌切换、query 深链——老用户零迁移。</p>
+        <p class="pull">「结构上无可挑剔，语义上略不匹配」——体验官</p>
+        <div class="mock">
+          <div class="cap">板块榜 · 结构示意（非真实行情 · 11 行无需分页/搜索）</div>
+          <div class="line"><span class="g">信息技术</span><span class="sector-sub">32涨 / 8跌 · 领涨 NVDA</span><span class="up">+2.1%</span></div>
+          <div class="line"><span class="g">非必需消费</span><span class="sector-sub">21涨 / 4跌 · 领涨 TSLA</span><span class="up">+1.6%</span></div>
+          <div class="line"><span class="g">能源</span><span class="sector-sub">6涨 / 22跌 · 领跌 XOM</span><span class="down">−1.2%</span></div>
+        </div>
+        <div class="scores">
+          <div class="srow"><span class="who c-ux">体验官</span><span class="track"><span class="fill f-ux" style="width:76.7%"></span></span><span class="num">46<span>/60</span></span></div>
+          <div class="srow"><span class="who c-genz">年轻用户</span><span class="track"><span class="fill f-genz" style="width:43.3%"></span></span><span class="num">26<span>/60</span></span></div>
+          <div class="srow"><span class="who c-pro">专业投资</span><span class="track"><span class="fill f-pro" style="width:61.7%"></span></span><span class="num">37<span>/60</span></span></div>
+          <div class="tot"><span class="lab">总印象</span><span class="big">109<small>/180</small></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案乙 -->
+    <div class="panel cand B">
+      <div class="inner">
+        <span class="cand-tag"><span class="box"></span>方案乙 · 今日主线复盘</span>
+        <h3>三张指数卡，读完今天</h3>
+        <p class="tagline">结论先行：一句话主线 + 领涨/领跌 Top5 双栏，收盘 3 分钟。</p>
+        <p class="pull">「它赢在跟开发对齐，输在跟我对齐」——年轻用户（评方案甲）</p>
+        <div class="mock">
+          <div class="cap">今日主线 · AI 一句话（示意 · 喂市场级快讯池）</div>
+          <div class="line"><span class="g">今日最强</span><span class="up">信息技术 +2.1%</span></div>
+          <div class="line"><span class="sector-sub">领涨 NVDA</span><span class="up">+4.1%</span></div>
+          <div class="line"><span class="g">今日最弱</span><span class="down">能源 −1.2%</span></div>
+        </div>
+        <div class="scores">
+          <div class="srow"><span class="who c-ux">体验官</span><span class="track"><span class="fill f-ux" style="width:75%"></span></span><span class="num">45<span>/60</span></span></div>
+          <div class="srow"><span class="who c-genz">年轻用户</span><span class="track"><span class="fill f-genz" style="width:85%"></span></span><span class="num">51<span>/60</span></span></div>
+          <div class="srow"><span class="who c-pro">专业投资</span><span class="track"><span class="fill f-pro" style="width:51.7%"></span></span><span class="num">31<span>/60</span></span></div>
+          <div class="tot"><span class="lab">总印象</span><span class="big">127<small>/180</small></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="small" style="margin-top:10px">总分只是参考——三位的分歧不在质量高低，而在<strong>「把美股当工作台浏览」还是「当一条今日主线来读」</strong>。往下看分歧与本该一起带上的必改项。</p>
+
+  <!-- ======= 02 评审分歧 ======= -->
+  <div class="sec-head">
+    <span class="n">02</span><h2>三位评审，两派主张</h2><span class="line"></span>
+  </div>
+
+  <div class="verdict ux">
+    <div><span class="role">体验官<span class="big">产品体验官</span></span></div>
+    <div class="stance"><strong>判甲略优（46:45），但真正推荐的是混合。</strong>平台全站已是「主从工作台」一种语法，老用户是当下唯一真实用户群——甲不引入第二套页面习语；甲的短板「主线不一眼」正好用乙的摘要带封口。年轻人反感的分页/搜索在 11 行数据上确实该删。</div>
+    <div class="pickrow"><span class="choicechip pickA"><span class="dot"></span>甲骨架 + 乙摘要带</span></div>
+  </div>
+
+  <div class="verdict genz">
+    <div><span class="role">年轻用户<span class="big">Gen-Z · 移动端投资者</span></span></div>
+    <div class="stance"><strong>乙直接做首版（51 分，全场最高）。</strong>11 个板块的 Top5+Top5 已接近全量，信息几乎不丢；三卡+一句话=10 秒拿到「今天什么在涨跌」，好截图好转发、抽屉天生适合小屏。甲最扎眼的毛病：给 11 行数据配分页和搜索框——「老软件实锤」。</div>
+    <div class="pickrow"><span class="choicechip pickB"><span class="dot"></span>乙 · 直接首版</span></div>
+  </div>
+
+  <div class="verdict pro">
+    <div><span class="role">专业投资<span class="big">量化 / 基本面研究</span></span></div>
+    <div class="stance"><strong>甲骨架落地（37:31），但要把乙的叙事带搬上页首。</strong>真实链条是「看板块强弱→判断主线→落到个股」——甲的全量横向比较 + 行内参与度(涨X/跌Y) + 右栏下钻核实领涨是否孤例，是复盘离不开的动作。乙把 AI 因果叙事当唯一主结论，数据却撑不起归因——专业上它更危险。</div>
+    <div class="pickrow"><span class="choicechip pickA"><span class="dot"></span>甲骨架 + 乙叙事带</span></div>
+  </div>
+
+  <p class="small">体验官与专业投资者在「甲为骨架」上会合，但都要求把乙的「叙事摘要带」吸收到页首；年轻用户反向强烈主张乙直接首版、只吸收甲的领涨/领跌对称细节。方向见文末。</p>
+
+  <!-- ======= 03 共识必改项 ======= -->
+  <div class="sec-head">
+    <span class="n">03</span><h2>三方都点名的必改项</h2><span class="line"></span>
+  </div>
+  <p class="small" style="margin:-10px 0 14px">无论最终选哪套，以下四项必须一起带上——都源于「数据层 B 真实给得出什么」。</p>
+  <div class="fixlist">
+    <div class="fix">
+      <div class="h"><span>广度数字别画饼</span><span class="tag">数据口径</span></div>
+      <p>线框里「涨 3210/4820、新高 45/新低 28」这类全市场数字，数据层 B <strong>产不出</strong>——只有标普500约 503 只成分。要么按「标普500成分 约300/200涨跌」如实标口径，要么删除，绝不显示假数据。</p>
+    </div>
+    <div class="fix">
+      <div class="h"><span>板块涨幅是「自算」不是「官方」</span><span class="tag">数据口径</span></div>
+      <p>板块涨跌是<strong>标普500成分等权聚合</strong>，不是官方 GICS 板块指数、更非市值加权（NVDA 与小盘股同权）。全页永久标注该口径，并把 <code>as_of</code> 压到最显眼处——盘中打开明示「美股盘中，显示上一交易日收盘」。</p>
+    </div>
+    <div class="fix">
+      <div class="h"><span>AI 一句话：只陈述，不归因</span><span class="tag">叙事纪律</span></div>
+      <p>输入只有等权涨跌 + 过滤快讯，撑不起「受油价拖累」这类因果句。话术限为「信息技术最强 +2.1%，32涨/8跌，领涨 NVDA +4.1%」，并与可核对的原始数字并排；AI 缺席时用确定性静态句兜底，页面结论层不许悬空。</p>
+    </div>
+    <div class="fix">
+      <div class="h"><span>砍掉为「几百板块」设计的控件</span><span class="tag">体验</span></div>
+      <p>11 个板块不需要搜索框 + 分页 10/页；只有成分列表（每板块 20–80 只）才需要分页。领涨/领跌方向切换保留即可。</p>
+    </div>
+  </div>
+
+  <!-- ======= 04 两个可落地方向 ======= -->
+  <div class="sec-head">
+    <span class="n">04</span><h2>落地方向</h2><span class="line"></span>
+  </div>
+  <div class="grid2">
+    <div class="panel dir">
+      <div class="inner">
+        <div class="who">方向一 · 体验官 × 专业投资 推荐</div>
+        <h3>甲骨架 + 乙摘要带</h3>
+        <p>页面顶部是「叙事摘要带」（3 指数 + 一句话主线 + 领涨/领跌 Top 芯片），下方是 11 行全量板块榜，点行右栏下钻成分。</p>
+        <ul>
+          <li>与 A 股共用一个「主从工作台」心智入口，老用户零学习</li>
+          <li>全量横向比较 + 行内参与度，最贴合真实投研链条</li>
+          <li>为二期留最完整的结构位：个股、A股联动、5 日动量列</li>
+        </ul>
+        <div class="rec"><span class="tick">✓</span>适合把美股当作平台能力的自然延伸</div>
+      </div>
+    </div>
+    <div class="panel dir">
+      <div class="inner">
+        <div class="who">方向二 · 年轻用户 推荐</div>
+        <h3>乙直接做首版</h3>
+        <p>三大指数卡 + AI 一句话 + 领涨/领跌双栏，全量板块收进一个不打扰的「查看全部」折叠位。</p>
+        <ul>
+          <li>结论喂到嘴边，10 秒完成「收盘复盘」，移动端天然成立</li>
+          <li>数据量小，Top5+Top5 已近全量，信息几乎不丢</li>
+          <li>与「每日收盘一次」的低频数据节奏最匹配，不假装实时</li>
+        </ul>
+        <div class="rec"><span class="tick">✓</span>适合把美股定位成独立复盘场景单独运营</div>
+      </div>
+    </div>
+  </div>
+  <p class="small">两个方向都能把第 03 节的四项必改项原样带上，也都不改变新闻结论（美股个股新闻 = 二期）。</p>
+
+  <!-- ======= 05 拍板 ======= -->
+  <div class="ask">
+    <div class="eyebrow">决策点 · 交给你</div>
+    <h2>美股首版，你要哪副面孔？</h2>
+    <p class="small" style="margin-top:6px">选定后我会据此进入实施计划。下列按钮只是示意——直接在对话里告诉我编号即可。</p>
+    <div class="opts">
+      <button class="opt">① 方向一：甲骨架 + 乙摘要带<span>体验官 × 专业投资 共同推荐</span></button>
+      <button class="opt">② 方向二：乙 · 今日主线复盘直接首版<span>年轻用户 强烈推荐</span></button>
+      <button class="opt">③ 纯甲 · 完整板块工作台<span>最贴近 A 股现状，改动最小</span></button>
+      <button class="opt">④ 纯乙 + 领涨/跌对称细节<span>乙为骨，仅吸收甲一处细节</span></button>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span><b>评审</b> 体验官 · Gen-Z · 专业投资（并行 workflow）</span>
+    <span><b>设计</b> 01 数据层 · 02 页面 IA · 03 新闻可行性</span>
+    <span><b>结论</b> 数据层 = 方案B（已定）</span>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--ux)"></i>体验官</span>
+    <span><i style="background:var(--genz)"></i>年轻用户</span>
+    <span><i style="background:var(--pro)"></i>专业投资</span>
+    <span><i style="background:var(--red)"></i>涨 / 领涨</span>
+    <span><i style="background:var(--green)"></i>跌 / 领跌</span>
+  </div>
+</div>
+</body>
+</html>

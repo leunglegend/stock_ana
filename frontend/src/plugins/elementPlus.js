@@ -24,6 +24,7 @@ import { ElTabPane, ElTabs } from 'element-plus/es/components/tabs/index.mjs'
 import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs'
 import { ElTooltip } from 'element-plus/es/components/tooltip/index.mjs'
 import {
+  Compass as Globe,
   DataAnalysis,
   Document,
   DocumentRemove,
@@ -81,6 +82,8 @@ const icons = {
   DataAnalysis,
   Document,
   DocumentRemove,
+  // @element-plus/icons-vue 无 Globe 图标，以罗盘(Compass)代指美股/全球市场
+  Globe,
   Loading,
   Monitor,
   Money,
