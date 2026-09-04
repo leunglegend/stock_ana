@@ -23,6 +23,14 @@ test('useUsMarket 导出摘要/榜单/AI 状态', async () => {
   }
 })
 
+test('useUsMarket AI 分块过滤 📊/🤖 开场帧并把 ❌ 记为错误', async () => {
+  const code = await read('composables/useUsMarket.js')
+  assert.match(code, /startsWith\('📊'\)/)
+  assert.match(code, /startsWith\('🤖'\)/)
+  assert.match(code, /startsWith\('❌'\)/)
+  assert.match(code, /aiError\.value = true/)
+})
+
 test('useUsCard 只消费 summary 接口', async () => {
   const code = await read('composables/useUsCard.js')
   assert.match(code, /useAsyncSection\(getUsSummary/)

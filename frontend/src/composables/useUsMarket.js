@@ -13,6 +13,14 @@ export function useUsMarket() {
   let aiSource = null
   let aiRequestId = 0
 
+  function applyAiChunk(requestId, chunk) {
+    if (requestId !== aiRequestId) return
+    // 丢弃开场/元信息帧；❌ 帧标记出错；其余（含 ⚠️ 未配置兜底）原样追加
+    if (chunk.startsWith('📊') || chunk.startsWith('🤖')) return
+    if (chunk.startsWith('❌')) return void (aiError.value = true)
+    aiText.value += chunk
+  }
+
   async function generateAiSummary() {
     const requestId = ++aiRequestId
     if (aiSource) { aiSource.close(); aiSource = null }
@@ -21,7 +29,7 @@ export function useUsMarket() {
     aiText.value = ''
     try {
       aiSource = getUsAiSummary(
-        (chunk) => { if (requestId === aiRequestId) aiText.value += chunk },
+        (chunk) => applyAiChunk(requestId, chunk),
         () => { if (requestId === aiRequestId) aiLoading.value = false },
         () => { if (requestId === aiRequestId) { aiLoading.value = false; aiError.value = true } },
       )

@@ -126,10 +126,11 @@ async function retryStocks() {
 async function refreshAll() {
   refreshing.value = true
   try {
-    const summaryPromise = runSection(summarySection)
-    const sectorsPromise = runSection(sectorsSection)
+    const tasks = [runSection(summarySection), runSection(sectorsSection)]
+    // 已展开某个板块下钻时，其成分列表也随刷新一起更新，避免详情面板停留在旧数据
+    if (selected.value) tasks.push(runSection(stocksSection))
     generateAiSummary()
-    await Promise.all([summaryPromise, sectorsPromise])
+    await Promise.all(tasks)
   } finally {
     refreshing.value = false
   }
