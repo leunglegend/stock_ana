@@ -78,6 +78,11 @@
   --color-info-dark: var(--color-info-600);
   --color-success: var(--color-down-500);
 
+  /* 点赞为股 · 支持色别名:点亮态暂用品牌金,将来换独立色只改此处 */
+  --color-support-50: var(--color-warning-50);
+  --color-support-500: var(--color-warning-500);
+  --color-support: var(--color-support-500);
+
   --surface-page: #f4f7fa;
   --surface-canvas: #ffffff;
   --surface-panel: #ffffff;
