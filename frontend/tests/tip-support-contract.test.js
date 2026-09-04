@@ -35,3 +35,20 @@ test('tokens.css 提供 --color-support-* 专属别名', async () => {
   assert.match(tokens, /--color-support-500:\s*var\(--color-warning-500\)/)
   assert.match(tokens, /--color-support:\s*var\(--color-support-500\)/)
 })
+
+const storeSource = await readFile(new URL('../src/store/support.js', import.meta.url), 'utf8')
+
+test('support store 只薄封装纯函数层,不含本地逻辑', () => {
+  assert.match(storeSource, /defineStore\(\s*'support'/)
+  assert.match(storeSource, /from\s+'\.\.\/utils\/supportPersistence'/)
+  assert.match(storeSource, /from\s+'\.\.\/utils\/supportState'/)
+  assert.ok(!storeSource.includes('stock_support_v1'), 'localStorage 键应只在 persistence 层出现')
+
+  const api = [
+    'likeIt', 'unlikeIt', 'takeAutoInvite',
+    'suppressInvites', 'snoozeDays', 'liked', 'suppressed', 'snoozed',
+  ]
+  api.forEach((name) => {
+    assert.ok(storeSource.includes(name), `store 应暴露 ${name}`)
+  })
+})
