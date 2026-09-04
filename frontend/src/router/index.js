@@ -147,15 +147,18 @@ router.beforeEach(async (to, from) => {
   return true
 })
 
-router.afterEach((to, _from, failure) => {
+router.afterEach((to, from, failure) => {
   if (failure) return
 
   updateDocumentTitle(to)
+  // 同路由(query 级跳变,如切板块 ?sector=…):只移动焦点、不滚屏——
+  // 否则会把已滚出视口上方的标题(如 /us 头部)重新拽回视野,造成「标题下降」跳变。
+  const stayOnSameRoute = to.path === from.path
   window.requestAnimationFrame(() => {
     const title = document.querySelector('[data-page-title]')
     if (!(title instanceof HTMLElement)) return
     title.tabIndex = -1
-    title.focus()
+    title.focus(stayOnSameRoute ? { preventScroll: true } : undefined)
   })
 })
 

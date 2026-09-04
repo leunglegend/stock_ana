@@ -14,6 +14,14 @@ test('router 注册 /us 美股复盘路由', async () => {
   assert.match(code, /title: '美股复盘'/)
 })
 
+test('切板块等 query 级跳变不把标题滚回顶部(preventScroll)', async () => {
+  const code = await read('router/index.js')
+  // 回归:点开行业板块(?sector=…)属同路由 query 导航,不得再把已滚出视口的
+  // data-page-title 拽回视野(「标题下降」)。真正换页才允许 focus 滚屏。
+  assert.match(code, /to\.path\s*===\s*from\.path/)
+  assert.match(code, /preventScroll:\s*true/)
+})
+
 test('Layout navBlueprint 含美股且 icon=Globe', async () => {
   const code = await read('components/Layout.vue')
   assert.match(code, /path: '\/us'/)
