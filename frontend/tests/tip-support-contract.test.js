@@ -52,3 +52,25 @@ test('support store 只薄封装纯函数层,不含本地逻辑', () => {
     assert.ok(storeSource.includes(name), `store 应暴露 ${name}`)
   })
 })
+
+const layoutSource = await readFile(new URL('../src/components/Layout.vue', import.meta.url), 'utf8')
+const footerSource = await readFile(new URL('../src/components/SiteFooter.vue', import.meta.url), 'utf8')
+
+test('Layout 接入 SiteFooter 并启用 sticky-footer flex', () => {
+  assert.match(layoutSource, /import\s+SiteFooter/)
+  assert.match(layoutSource, /<SiteFooter\s*\/>|<\/SiteFooter>/)
+  assert.match(layoutSource, /display:\s*flex/)
+  assert.match(layoutSource, /min-height:\s*100dvh/)
+  assert.match(layoutSource, /flex-direction:\s*column/)
+})
+
+test('SiteFooter 只放免责 + 一条静默增资入口,不动声量', () => {
+  // 免责文案本体在 supportCopy(supportCopy 契约测试已锁);此处断言组件引用它
+  assert.match(footerSource, /SUPPORT_COPY\.footerDisclaimer/)
+  assert.match(footerSource, /SUPPORT_COPY\.footerSiteName/)
+  assert.match(footerSource, /SUPPORT_COPY\.footerTipEntry/)
+  assert.match(footerSource, /useSupportUi/)
+  assert.match(footerSource, /TipSupportDialog/)
+  const counts = (re) => (footerSource.match(re) || []).length
+  assert.equal(counts(/SUPPORT_COPY\.footerTipEntry/g), 1, '页脚只有一个静默入口引用')
+})

@@ -27,6 +27,7 @@
           </transition>
         </RouterView>
       </main>
+      <SiteFooter />
     </div>
 
     <GlobalSearch v-model="searchVisible" />
@@ -41,6 +42,7 @@ import DesktopSidebar from './app/DesktopSidebar.vue'
 import CommandBar from './app/CommandBar.vue'
 import MobileNav from './app/MobileNav.vue'
 import GlobalSearch from './GlobalSearch.vue'
+import SiteFooter from './SiteFooter.vue'
 import { useResponsive } from '@/composables/useResponsive'
 
 const drawerVisible = ref(false)
@@ -88,13 +90,17 @@ const navItems = navBlueprint.map((item) => ({
 }
 
 .app-shell__main {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
+  min-height: 100dvh;
   margin-left: 168px;
 }
 
 .app-shell__content {
-  min-height: calc(100dvh - var(--command-bar-height));
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0 var(--spacing-4) var(--spacing-4);
 }
 
@@ -117,7 +123,7 @@ const navItems = navBlueprint.map((item) => ({
   }
 
   .app-shell__content {
-    min-height: calc(100dvh - var(--command-bar-height));
+    min-height: 0;
     padding: 0;
   }
 }
@@ -133,7 +139,7 @@ const navItems = navBlueprint.map((item) => ({
   }
 
   .app-shell__content {
-    min-height: auto;
+    min-height: 0;
     padding: 0 var(--spacing-2) var(--spacing-4);
   }
 }
