@@ -29,7 +29,8 @@ def main() -> int:
     seen, constituents = set(), []
     for r in rows:
         sym = (r.get("Symbol") or "").strip().upper()
-        name = (r.get("Security") or "").strip()
+        # 上游 CSV 个别行在名字后带残留分隔符（如 "ResMed|"），统一剥掉尾部 |
+        name = (r.get("Security") or "").strip().rstrip("|").strip()
         sector = (r.get("GICS Sector") or "").strip()
         if not sym or not sector:
             continue
