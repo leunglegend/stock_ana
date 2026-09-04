@@ -39,60 +39,83 @@ defineProps({
 </script>
 
 <style scoped>
+/* 摘要条与板块行 toolbar 等高：指数名、点位、涨跌同一条基线上横排，
+   涨跌计数也压成横向「上涨/下跌」小值，避免顶部形成竖排大数字的高垛。 */
 .us-index-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--spacing-5);
+  row-gap: var(--spacing-1);
   min-width: 0;
+  padding: var(--spacing-2) var(--spacing-4);
 }
 
 .us-index-strip__quote {
-  display: grid;
-  align-content: center;
-  gap: var(--spacing-1);
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
   min-width: 0;
-  padding: var(--spacing-3);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.us-index-strip__quote:first-child {
-  border-left: 0;
 }
 
 .us-index-strip__name {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
+  white-space: nowrap;
 }
 
 .us-index-strip__breadth {
+  display: flex;
+  align-items: baseline;
+  margin-left: auto;
+}
+
+.us-index-strip__breadth :deep(.metric-cell) {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, auto));
-  align-content: center;
-  gap: var(--spacing-6);
-  padding: var(--spacing-3) var(--spacing-4);
+  grid-template-columns: auto auto;
+  column-gap: var(--spacing-1);
+  align-items: baseline;
+  gap: 0;
+}
+
+.us-index-strip__breadth :deep(.metric-cell + .metric-cell) {
+  margin-left: var(--spacing-5);
+  padding-left: var(--spacing-5);
   border-left: 1px solid var(--border-subtle);
 }
 
+.us-index-strip__breadth :deep(.metric-cell__label) {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
 .us-index-strip__breadth :deep(.metric-cell__value) {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  line-height: var(--line-height-normal);
 }
 
 @media (max-width: 767px) {
   .us-index-strip {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-2);
+    padding-block: var(--spacing-3);
   }
 
   .us-index-strip__quote {
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .us-index-strip__quote:first-child {
-    border-top: 0;
+    flex-wrap: wrap;
   }
 
   .us-index-strip__breadth {
-    border-left: 0;
+    margin-left: 0;
+    padding-top: var(--spacing-1);
     border-top: 1px solid var(--border-subtle);
+  }
+
+  .us-index-strip__breadth :deep(.metric-cell + .metric-cell) {
+    margin-left: var(--spacing-4);
+    padding-left: var(--spacing-4);
   }
 }
 </style>
