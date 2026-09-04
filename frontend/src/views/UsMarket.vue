@@ -185,6 +185,9 @@ onUnmounted(() => closeAiSource())
 </script>
 
 <style scoped>
+/* 竖向节奏与板块行一致（header→摘要→表 用 spacing-3），避免堆叠处过密 */
+.us-market-page.workbench-page { gap: var(--spacing-3); }
+
 .us-market-page__header { min-width: 0; }
 .us-market-page__heading { display: grid; gap: 2px; min-width: 0; }
 .us-market-page__title { margin: 0; color: var(--text-primary); line-height: 1.3; }
