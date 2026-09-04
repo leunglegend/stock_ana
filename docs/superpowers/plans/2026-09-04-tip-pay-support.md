@@ -317,7 +317,8 @@ import test from 'node:test'
 const copyPath = '../src/components/support/supportCopy.js'
 const copySource = await readFile(new URL(copyPath, import.meta.url), 'utf8')
 
-const FORBIDDEN = ['募捐', '慈善', '公益', '后台会看到', '收益承诺', '保本', '稳赚', '翻倍']
+const FORBIDDEN = ['募捐', '慈善', '公益', '后台会看到', '保本', '稳赚', '翻倍']
+// 注:「不构成任何收益承诺」是合规否认句(mustHave 锁定),故收益承诺不整体禁用
 
 test('supportCopy 不含红线措辞', () => {
   FORBIDDEN.forEach((word) => {
@@ -615,11 +616,14 @@ test('Layout 接入 SiteFooter 并启用 sticky-footer flex', () => {
 })
 
 test('SiteFooter 只放免责 + 一条静默增资入口,不动声量', () => {
-  assert.match(footerSource, /不构成任何投资建议/)
+  // 免责文案本体在 supportCopy(supportCopy 契约测试已锁);此处断言组件引用它
+  assert.match(footerSource, /SUPPORT_COPY\.footerDisclaimer/)
+  assert.match(footerSource, /SUPPORT_COPY\.footerSiteName/)
+  assert.match(footerSource, /SUPPORT_COPY\.footerTipEntry/)
   assert.match(footerSource, /useSupportUi/)
   assert.match(footerSource, /TipSupportDialog/)
   const counts = (re) => (footerSource.match(re) || []).length
-  assert.equal(counts(/footerTipEntry/g), 1, '页脚只有一个静默入口')
+  assert.equal(counts(/SUPPORT_COPY\.footerTipEntry/g), 1, '页脚只有一个静默入口引用')
 })
 ```
 
@@ -707,7 +711,7 @@ const dialogVisible = computed({
       {{ SUPPORT_COPY.footerTipEntry }}
     </button>
 
-    <TipSupportDialog v-model="ui.visible" />
+    <TipSupportDialog v-model:visible="ui.visible" />
   </footer>
 </template>
 
