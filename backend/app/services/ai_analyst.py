@@ -712,14 +712,17 @@ def _build_us_market_prompt(snapshot) -> str:
     lines = [f"【数据日期】美东 {snapshot.as_of}（收盘）"]
     for i in snapshot.indices:
         lines.append(f"- 指数 {i.name}：{i.value:.2f} 点 {i.change_pct:+.2f}%")
-    gainers = [s for s in snapshot.sectors[:3]]
-    losers = [s for s in snapshot.sectors[-3:]][::-1]
-    lines.append("【领涨板块】" + "；".join(
-        f"{s.name} {s.change_pct:+.2f}%（领涨 {s.leading_symbol} {s.leading_change_pct:+.2f}%）"
-        for s in gainers) if gainers else "无")
-    lines.append("【领跌板块】" + "；".join(
-        f"{s.name} {s.change_pct:+.2f}%（领跌 {s.leading_symbol} {s.leading_change_pct:+.2f}%）"
-        for s in losers) if losers else "无")
+    # 领涨/领跌只取实际涨/跌的板块（与 /summary 口径一致），避免全绿日把
+    # 「领涨板块 X -0.4%」这类自相矛盾的事实行喂给模型
+    def _sector_line(s, word):
+        return f"{s.name} {s.change_pct:+.2f}%（{word} {s.leading_symbol} {s.leading_change_pct:+.2f}%）"
+
+    gainers = [s for s in snapshot.sectors if s.change_pct > 0][:3]
+    losers = [s for s in snapshot.sectors if s.change_pct < 0][-3:][::-1]
+    lines.append("【领涨板块】"
+                 + ("；".join(_sector_line(s, "领涨") for s in gainers) if gainers else "无"))
+    lines.append("【领跌板块】"
+                 + ("；".join(_sector_line(s, "领跌") for s in losers) if losers else "无"))
     adv = sum(s.advancers for s in snapshot.sectors)
     dec = sum(s.decliners for s in snapshot.sectors)
     lines.append(f"【成分广度】标普500成分口径：上涨 {adv} / 下跌 {dec}")

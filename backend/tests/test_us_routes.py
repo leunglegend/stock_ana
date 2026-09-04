@@ -1,3 +1,4 @@
+import time
 import unittest
 from unittest.mock import patch
 
@@ -12,6 +13,7 @@ client = TestClient(app)
 def _fake_snapshot():
     class Snap:
         as_of = "2026-09-02"
+        updated_at = time.time()
         indices = [UsIndexQuote(symbol="DJI", name="道琼斯", value=53061.95, change_pct=0.56),
                    UsIndexQuote(symbol="SPX", name="标普500", value=4512.3, change_pct=0.72),
                    UsIndexQuote(symbol="IXIC", name="纳斯达克", value=14032.11, change_pct=1.18)]
