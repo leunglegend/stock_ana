@@ -1,181 +1,125 @@
 # 项目进度
 
-最后更新：2026-08-25
+最后更新：2026-09-06（test 分支工作区 · 供 codex / agent 交接）
+
+> 本文件由 git 跟踪，与各 worktree 共用同一份。改动后在本分支 commit 即同步到当前工作区；合并/变基时以对应分支为准。
 
 ## 项目概览
 
-智能股票分析平台 — 基于 Vue 3 + FastAPI + AKShare + 大模型的股票分析网站。
+智能股票分析平台 — Vue 3 + FastAPI + AKShare + 大模型（火山引擎 Coding Plan / Anthropic 兼容 / 现接 DeepSeek）的股票分析网站。输入代码 → 行情/K线/财务 → AI 生成分析建议。
+
+## 当前分支拓扑（重要）
+
+三条线并行，各自独立演进，**都未互相合并**：
+
+| 分支 | 基线 | 状态 | 内容 |
+|------|------|------|------|
+| `main` | — | 已发布 | 美股复盘 `/us`（UsMarket.vue）、板块/市场多源 fallback、盘后复盘、通知、机会雷达、监控等全量功能；latest `3dcd6ce` |
+| `test`（**本工作区**） | `main` 前身 baa738b | 工作区当前分支 | 领先 main 3 笔：决策报告（`3402ff2`）、美股方向 docs（`cb82751`）、auto-save 脚本（`3dd3a0e`）；**不含 main 上的美股实现**（frontend 无 UsMarket.vue） |
+| `feat/tip-pay-support` | main（3dcd6ce） | 🔴 独立 worktree `us-stock` 推进中 | 点赞打赏功能，领先 main 14 笔（收款码已接真码 `9f734ae`） |
+| `fix/us-sector-title-sink` | main（3dcd6ce） | 🔴 独立 worktree `us-layout-fix` 推进中 | 美股切板块整页标题下沉修复，领先 main 1 笔 `63f19a2` |
+
+worktree 位置：`.claude/worktrees/us-stock`、`.claude/worktrees/us-layout-fix`。
 
 ## 功能完成度
 
-### ✅ 已完成
+### ✅ 已上线（main / test 共有基线）
 
 #### 后端 API
-| 接口 | 方法 | 路径 | 状态 | 说明 |
-|------|------|------|------|------|
-| 健康检查 | GET | `/` | ✅ | |
-| 股票搜索 | GET | `/api/stock/search?q=` | ✅ | 代码/名称模糊搜索，本地缓存 1h |
-| 股票行情 | GET | `/api/stock/{code}` | ✅ | K线降级兜底，稳定可靠 |
-| K线数据 | GET | `/api/stock/{code}/kline` | ✅ | 日/周/月K + MA5/10/20 + MACD + KDJ + RSI(6/12/24) |
-| 财务数据 | GET | `/api/stock/{code}/financial` | ✅ | PE/PB/总市值/ROE/净利润/营收/毛利率/净利率 |
-| AI 个股分析 | GET | `/api/stock/{code}/analyze` | ✅ | SSE 流式输出 |
-| 行业板块 | GET | `/api/board/industry` | ✅ | 多数据源 fallback，90 个板块 |
-| 概念板块 | GET | `/api/board/concept` | ✅ | 多数据源 fallback |
-| 板块成分股 | GET | `/api/board/{type}/{name}/stocks` | ✅ | 行业/概念板块成分股列表 |
-| 市场概览 | GET | `/api/board/market/summary` | ✅ | 三大指数 + 涨跌家数 + 涨跌停 + 成交额 |
-| AI 市场点评 | GET | `/api/board/market/ai-summary` | ✅ | SSE 流式输出 |
-| 用户注册 | POST | `/api/auth/register` | ✅ | 用户名+密码 |
-| 用户登录 | POST | `/api/auth/login` | ✅ | 返回 JWT token |
-| 当前用户 | GET | `/api/auth/me` | ✅ | |
-| 自选股分组列表 | GET | `/api/watchlist/groups` | ✅ | 需登录，含分组下的股票 |
-| 新建/更新/删除分组 | POST/PUT/DELETE | `/api/watchlist/groups` | ✅ | |
-| 添加/更新/删除自选股 | POST/PUT/DELETE | `/api/watchlist/items` | ✅ | |
-| 批量同步自选股 | POST | `/api/watchlist/sync` | ✅ | 支持 replace 模式 |
-| 复盘报告列表 | GET | `/api/reports` | ✅ | 分页 |
-| 复盘报告详情 | GET | `/api/reports/{id}` | ✅ | 含个股分析 |
-| 手动生成复盘 | POST | `/api/reports/generate` | ✅ | 后台异步执行 |
-| 通知列表 | GET | `/api/notifications` | ✅ | 分页 + 未读筛选 |
-| 通知未读数 | GET | `/api/notifications/unread-count` | ✅ | |
-| 标记已读 | PUT | `/api/notifications/{id}/read` | ✅ | |
-| 全部已读 | PUT | `/api/notifications/read-all` | ✅ | |
+| 接口 | 方法 | 路径 |
+|------|------|------|
+| 健康检查 | GET | `/` |
+| 股票搜索 | GET | `/api/stock/search?q=` |
+| 股票行情 | GET | `/api/stock/{code}` |
+| K线数据 | GET | `/api/stock/{code}/kline`（日/周/月K + MA + MACD + KDJ + RSI） |
+| 财务数据 | GET | `/api/stock/{code}/financial` |
+| AI 个股分析 | GET | `/api/stock/{code}/analyze`（SSE 流式） |
+| 行业/概念板块 | GET | `/api/board/industry`、`/api/board/concept` |
+| 板块成分股 | GET | `/api/board/{type}/{name}/stocks` |
+| 市场概览 | GET | `/api/board/market/summary` |
+| AI 市场点评 | GET | `/api/board/market/ai-summary`（SSE） |
+| 盘中监控总览 | GET | `/api/monitor/overview`（需登录） |
+| 用户注册/登录/当前用户 | POST/POST/GET | `/api/auth/register` `/login` `/me` |
+| 自选股分组/明细/同步 | — | `/api/watchlist/*`（需登录） |
+| 复盘报告列表/详情/生成 | — | `/api/reports*` |
+| 通知列表/未读/已读 | — | `/api/notifications*` |
 
 #### 前端页面
-| 页面 | 路由 | 状态 | 说明 |
-|------|------|------|------|
-| 首页/市场概览 | `/` | ✅ | 三大指数 + 市场情绪 + 热门板块 + AI 点评 |
-| 个股详情 | `/stock/:code` | ✅ | 行情栏 + K线图 + 财务 + AI 分析 |
-| 自选股 | `/watchlist` | ✅ | 分组管理 + 成本 + 盈亏计算 + 云端同步 |
-| 板块监控 | `/board` | ✅ | 行业/概念 Tab + 板块详情抽屉 |
-| 复盘报告列表 | `/reports` | ✅ | 历史报告列表 + 手动生成 |
-| 复盘报告详情 | `/reports/:id` | ✅ | 市场总览 + 关注重点 + 个股分析 + 风险提示 |
+Dashboard（`/`）、个股详情（`/stock/:code`）、自选股（`/watchlist`）、板块监控（`/board`）、复盘列表（`/reports`）、复盘详情（`/reports/:id`）、盘中监控（`/monitor`）、机会雷达（`/radar`）、搜索页（`/search`）。
 
-#### 前端组件
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| 登录/注册弹窗 | ✅ | 用户名 + 密码，Tab 切换 |
-| 消息铃铛 | ✅ | 未读数红点 + 下拉列表 + 全部已读 |
-| 用户状态侧边栏 | ✅ | 未登录显示登录按钮，已登录显示用户名+退出 |
+### 🇺🇸 美股复盘（main 已上线，test 分支未含）
+- `/us` 页面 + Dashboard 美股收盘摘要卡；3 大美股指数、11 个 GICS 板块等权口径、板块内领涨领跌成分、AI 一句话主线（SSE）
+- 文件：`frontend/src/views/UsMarket.vue`（main 才有）；后端美股数据链路（AKShare 新浪美股 + V8 预热）
+- 演进：PR#1 装配 → PR#3 V8 预热修复多线程崩溃 → PR#4 版式对齐；版本发布流程固化 PR#2
 
-#### 技术指标（K线副图）
-- 成交量（柱状）
-- MACD（DIF/DEA/MACD柱）
-- KDJ（K/D/J 三线）
-- RSI（6/12/24 日）
+### 🟡 test 分支新推进（未合 main）
+- **AI 决策报告**：后端 `GET /api/stock/{code}/decision-report`（`3402ff2`，已合入 test）
+  - 前端个股页「决策报告」标签，切到才懒加载；`DecisionReport.vue` 组件 + 契约测试
+  - 结构化 JSON 输出显式 `thinking={"type":"disabled"}`（DeepSeek 等推理模型适配）
+  - 全链路同步 AKShare 调用改 `run_in_threadpool`（消除事件循环阻塞/超时）；日K/财务加短 TTL 缓存与请求锁
+  - 测试：后端 `test_decision_report.py`、前端 `decision-report-contract.test.js`；全绿
 
-#### 系统能力
-- **用户系统**：用户名 + 密码 + JWT 鉴权
-- **自选股云端同步**：本地/云端双模式，首次登录自动提示同步
-- **盘后 AI 复盘**：APScheduler 定时任务，交易日 15:30 自动生成
-- **消息中心**：站内信通知，60s 轮询未读数
+## 在办事项
 
-### 🔧 架构特性
-- **多数据源 fallback**：东财 → 同花顺 → 旧缓存，网络波动自动降级
-- **内存缓存 + 定时刷新**：板块 2min、市场概览 1min，首次同步加载
-- **AKShare 懒加载**：未安装也能启动，使用时才 import
-- **重试机制**：`@_retry` 装饰器，指数退避
-- **CORS 配置**：支持 localhost:5173
-- **SQLite 数据库**：SQLAlchemy 2.x ORM，轻量零配置
-- **APScheduler 定时任务**：BackgroundScheduler，Cron 表达式可配置
-- **AI JSON 解析容错**：自动提取 JSON 内容，兼容各种 AI 返回格式
+- [ ] `feat/tip-pay-support`（us-stock worktree）：点赞打赏——收款码已接真码，仍有收尾（存根/契约/合规文案）
+- [ ] `fix/us-sector-title-sink`（us-layout-fix worktree）：美股切板块标题下沉/回弹修复，query 级导航禁滚屏
+- [ ] 决策报告待合并 main（test 领先 main 3 笔未合）
+
+## 待办 / 规划
+
+- [ ] **美股方向二期**：`direction1` plan(2026-09-03-us-stock-direction1.md)实为美股复盘功能的实施蓝图,其目标(美股复盘 /us + Dashboard 摘要卡)已在 **main 上线**(PR#1 ec06a80, 2026-09-04);文档状态行未回填,勿当"未开始"。二期边界(个股新闻/美股个股详情等)另案
+- [ ] 登录注册页 UI 重设计（`docs(auth)` 规格已提交：f6c9c61 / 1f0995b，界面未做）
+- [ ] 打赏 QR 素材（`frontend/src/assets/{alipay,wechat}-qr.jpg`）待 tip-pay 分支接线，当前 test 工作区无引用
+
+## 启动命令（端口已统一 52764，旧文档 8000 作废）
+
+```bash
+# 后端
+cd backend && source venv/bin/activate
+uvicorn app.main:app --reload --port 52764
+
+# 前端
+cd frontend && npm run dev    # http://localhost:5173，/api 代理到 52764
+```
+
+## 测试
+
+```bash
+# 后端（用 venv 直跑，避免环境差异）
+cd backend && venv/bin/python -m pytest tests/ -q        # 当前 45 passed
+
+# 前端契约测试（纯 node，不依赖 vite）
+cd frontend && node --test tests/*.test.js               # 当前 180 passed
+```
+
+## 已知问题 & 坑（重要）
+
+1. **AI 配置被 shell 环境变量劫持**：本机 shell 全局设了 `ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic` + `ANTHROPIC_AUTH_TOKEN`（供 Claude Code 走 DeepSeek）。后端 `config.py` 用 `ARK_*` 优先、否则回退 `ANTHROPIC_*` → **实际连 DeepSeek 而非 README/.env.example 的火山引擎**。排查 AI 接口失败先 `env | grep -iE "ARK_|ANTHROPIC"`。要换供应商在 `backend/.env` 显式写 `ARK_API_KEY`/`ARK_BASE_URL`/`ARK_MODEL` 覆盖。
+2. **DeepSeek 是推理模型**：结构化输出（决策报告）必须显式 `thinking={"type":"disabled"}`，否则 max_tokens 全耗在 ThinkingBlock → TextBlock 空 →「不是有效 JSON」。诊断打印 `text_len=0`。
+3. **东财接口网络问题**：`*_em` 接口在部分网络 Connection reset，已做多源 fallback（东财 → 同花顺 → 旧缓存）。
+4. **async 路由不得直接同步调 AKShare**：会阻塞事件循环导致全部 /api 超时，必须 `run_in_threadpool`（test 分支已全覆盖，12 个调用点）。
+5. **内存管理**：macOS low-memory 会杀后台任务（vite ~20MB、uvicorn ~18MB）。多 worktree 同时跑服务易被杀，优先只跑一条线的标准端口。
+6. 定时任务仅按周一到周五，不判节假日；JWT token 存 localStorage 为轻量方案。
+7. `decision-brief.preview.html` 是本地预览衍生品，不入库；`.claude/worktrees/` 与 `settings.local.json` 已被 .gitignore 忽略。
 
 ## 文件结构速查
 
 ```
-backend/
-├── app/
-│   ├── main.py              # FastAPI 入口 + 启动预加载 + scheduler
-│   ├── config.py            # 配置（含数据库/JWT/定时任务）
-│   ├── database.py          # SQLAlchemy 引擎 + 会话 + Base
-│   ├── dependencies.py      # get_current_user 等依赖注入
-│   ├── models/              # SQLAlchemy ORM 模型
-│   │   ├── user.py          # 用户
-│   │   ├── watchlist.py     # 自选股（分组+明细）
-│   │   ├── report.py        # 复盘报告（日报+个股分析）
-│   │   └── notification.py  # 通知消息
-│   ├── schemas/             # Pydantic 数据模型
-│   │   ├── auth.py
-│   │   ├── watchlist.py
-│   │   ├── report.py
-│   │   └── notification.py
-│   ├── routes/
-│   │   ├── auth.py          # 认证 API
-│   │   ├── stock.py         # 股票相关 API
-│   │   ├── board.py         # 板块 + 市场 API
-│   │   ├── watchlist.py     # 自选股 API
-│   │   ├── report.py        # 复盘报告 API
-│   │   └── notification.py  # 通知 API
-│   └── services/
-│       ├── stock_data.py    # 股票数据 + 技术指标计算
-│       ├── board_data.py    # 板块数据（多源 fallback）
-│       ├── market_data.py   # 市场概览（指数+涨跌统计+涨跌停）
-│       ├── ai_analyst.py    # AI 分析（个股/市场/盘后复盘）
-│       ├── auth_service.py  # 认证服务（密码哈希/JWT）
-│       ├── watchlist_service.py  # 自选股服务
-│       ├── report_service.py     # 复盘报告服务
-│       ├── notification_service.py  # 通知服务
-│       ├── scheduler.py     # APScheduler 定时任务
-│       └── data_cache.py    # 缓存管理 + 定时刷新
-├── requirements.txt
-└── .env.example
+backend/app/
+├── main.py / config.py / database.py / dependencies.py
+├── models/           # SQLAlchemy ORM（user/watchlist/report/notification/schemas.py）
+├── routes/           # stock / board / monitor / auth / watchlist / report / notification
+├── services/         # stock_data / board_data / market_data / ai_analyst / monitor_service
+│                     # report_service / notification_service / auth_service
+│                     # signal_rules / data_cache / scheduler / sse
+└── tests/
 
-frontend/
-├── src/
-│   ├── views/               # Dashboard / StockDetail / Watchlist / BoardMonitor / Reports / ReportDetail
-│   ├── components/          # StockSearch / StockInfo / KLineChart / FinancialCard / AiAdvice / Layout
-│   │                        # / LoginModal / NotificationBell / GlobalSearch
-│   ├── api/                 # http.js (通用axios) + stock.js + auth.js + watchlist.js + report.js + notification.js
-│   ├── store/               # index.js (自选股 store) + user.js (用户 store)
-│   └── router/index.js      # 路由 + 登录守卫
-└── vite.config.js           # /api 代理到 8000 + @ 别名
+frontend/src/
+├── views/            # Dashboard / StockDetail / Watchlist / BoardMonitor / Reports
+│                     # ReportDetail / Monitor / OpportunityRadar / Search
+├── components/       # base / app / stock / board / dashboard / monitor / radar / reports / watchlist
+├── api/  store/  router/  composables/  styles/  utils/
+frontend/tests/       # *.test.js 契约测试（node --test 直跑）
+docs/design-rounds/   # 设计决策轮方案 + decision-brief
+docs/superpowers/plans/  # 历次功能实施计划
 ```
-
-## 已知问题 & 注意事项
-
-1. **东财接口网络问题**：`*_em` 后缀的接口在某些网络环境可能 Connection reset，代码已做多源 fallback
-2. **涨跌家数精度**：优先全量行情统计，失败时用行业板块估算（会有偏差）
-3. **AI 配置**：需要 `ARK_API_KEY` + `ARK_MODEL`，未配置时显示友好提示
-4. **非交易时段**：实时行情可能延迟，K线数据作为降级方案更稳定
-5. **自选股存储**：支持 localStorage（游客）+ 服务端（登录用户）双模式
-6. **bcrypt 版本警告**：passlib 与 bcrypt 5.x 不兼容，已降级到 4.x，有 warning 但不影响功能
-7. **定时任务节假日**：仅按周一到周五调度，不判断法定节假日
-8. **Token 存储**：JWT token 存在 localStorage，轻量方案；生产环境建议使用 HTTP-only Cookie
-
-## 启动命令
-
-```bash
-# 后端
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-
-# 前端
-cd frontend
-npm run dev    # http://localhost:5173
-```
-
-## 环境变量（新增）
-
-```bash
-# 数据库
-DATABASE_URL=sqlite:///./stock_analyzer.db
-
-# JWT（必须配置）
-JWT_SECRET_KEY=your-secret-key-change-in-production
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_HOURS=24
-
-# 定时任务
-SCHEDULER_ENABLED=true
-DAILY_REPORT_CRON=30 15 * * 1-5
-```
-
-## 后续可做
-
-- [ ] 邮箱验证 / 找回密码
-- [ ] K线更多指标（BOLL、OBV、WR 等）
-- [ ] 多股对比功能
-- [ ] 选股器（按财务/技术指标筛选）
-- [ ] 回测功能
-- [ ] 邮件推送 / Webhook 推送
-- [ ] 报告导出（PDF/图片）
-- [ ] 节假日判断（更精准的定时任务）
