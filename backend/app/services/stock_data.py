@@ -7,6 +7,7 @@ from math import isfinite
 import re
 import time
 import functools
+import threading
 
 from app.models.schemas import (
     StockInfo, KLineData, KLineItem, FinancialData, StockSearchItem
@@ -51,6 +52,15 @@ def _get_pd():
 _stock_list_cache = None
 _cache_time = None
 _CACHE_DURATION = 3600  # 缓存1小时
+_stock_list_lock = threading.Lock()
+_kline_cache = {}
+_kline_cache_lock = threading.Lock()
+_kline_fetch_locks = {}
+_KLINE_CACHE_DURATION = 60
+_KLINE_STALE_DURATION = 300
+_FINANCIAL_CACHE = {}
+_FINANCIAL_CACHE_LOCK = threading.Lock()
+_FINANCIAL_CACHE_DURATION = 300
 
 
 def _retry(max_retries=3, delay=1):
@@ -97,30 +107,30 @@ def _get_stock_list():
         if (now - _cache_time).total_seconds() < _CACHE_DURATION:
             return _stock_list_cache
 
-    try:
-        # 获取沪市和深市股票列表
-        sh_df, sz_df = _fetch_stock_list()
-
-        stocks = []
-        # 沪市格式
-        for _, row in sh_df.iterrows():
-            stocks.append({
-                "code": str(row.get("证券代码", "")).strip(),
-                "name": str(row.get("证券简称", "")).strip(),
-            })
-        # 深市格式
-        for _, row in sz_df.iterrows():
-            stocks.append({
-                "code": str(row.get("A股代码", "")).strip(),
-                "name": str(row.get("A股简称", "")).strip(),
-            })
-
-        _stock_list_cache = stocks
-        _cache_time = now
-        return stocks
-    except Exception as e:
-        print(f"获取股票列表失败: {e}")
-        return []
+    with _stock_list_lock:
+        now = datetime.datetime.now()
+        if _stock_list_cache is not None and _cache_time is not None:
+            if (now - _cache_time).total_seconds() < _CACHE_DURATION:
+                return _stock_list_cache
+        try:
+            sh_df, sz_df = _fetch_stock_list()
+            stocks = []
+            for _, row in sh_df.iterrows():
+                stocks.append({
+                    "code": str(row.get("证券代码", "")).strip(),
+                    "name": str(row.get("证券简称", "")).strip(),
+                })
+            for _, row in sz_df.iterrows():
+                stocks.append({
+                    "code": str(row.get("A股代码", "")).strip(),
+                    "name": str(row.get("A股简称", "")).strip(),
+                })
+            _stock_list_cache = stocks
+            _cache_time = now
+            return stocks
+        except Exception as e:
+            print(f"获取股票列表失败: {e}")
+            return []
 
 
 def search_stock(keyword: str, limit: int = 10) -> List[StockSearchItem]:
@@ -159,54 +169,81 @@ def _fetch_spot_em():
 
 
 def _get_stock_name_from_cache(code: str) -> str:
-    """从本地股票列表缓存中获取股票名称"""
+    """仅从已加载的股票列表获取名称，不因行情请求触发全量列表加载。"""
     code = _normalize_code(code)
-    stocks = _get_stock_list()
+    with _stock_list_lock:
+        stocks = _stock_list_cache or []
     for s in stocks:
         if s["code"] == code:
             return s["name"]
     return code
 
 
-def get_stock_info(code: str) -> Optional[StockInfo]:
-    """
-    获取股票行情信息
-    策略：优先从K线数据构造（稳定），再尝试实时行情补充（可选）
-    """
+def _get_cached_daily_kline(code: str, lookback_days: int):
+    """读取带短 TTL 的日 K 原始数据，并合并同一股票的并发请求。"""
     code = _normalize_code(code)
-    name = _get_stock_name_from_cache(code)
+    bucket = max(lookback_days, 300)
+    key = (code, bucket)
+    now = time.monotonic()
+    with _kline_cache_lock:
+        cached = _kline_cache.get(key)
+        if cached and now - cached["fetched_at"] < _KLINE_CACHE_DURATION:
+            return cached["df"].copy()
+        lock = _kline_fetch_locks.setdefault(key, threading.Lock())
 
+    with lock:
+        now = time.monotonic()
+        with _kline_cache_lock:
+            cached = _kline_cache.get(key)
+            if cached and now - cached["fetched_at"] < _KLINE_CACHE_DURATION:
+                return cached["df"].copy()
+        start_date = (datetime.datetime.now() - datetime.timedelta(days=bucket)).strftime("%Y%m%d")
+        end_date = datetime.datetime.now().strftime("%Y%m%d")
+        try:
+            df = _fetch_kline(code, "daily", start_date, end_date)
+            if df is None or df.empty:
+                raise RuntimeError("K线为空")
+            with _kline_cache_lock:
+                _kline_cache[key] = {"fetched_at": time.monotonic(), "df": df.copy()}
+            return df.copy()
+        except Exception:
+            with _kline_cache_lock:
+                cached = _kline_cache.get(key)
+            if cached and time.monotonic() - cached["fetched_at"] < _KLINE_STALE_DURATION:
+                return cached["df"].copy()
+            raise
+        finally:
+            with _kline_cache_lock:
+                if _kline_fetch_locks.get(key) is lock:
+                    _kline_fetch_locks.pop(key, None)
+
+
+def _stock_info_from_kline(code: str, df, name: str) -> Optional[StockInfo]:
+    """从日 K 原始数据构造行情摘要。"""
+    if df is None or df.empty:
+        return None
+    latest = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else latest
+    close = float(latest.get("收盘", 0))
+    prev_close = float(prev.get("收盘", 0))
+    change_amount = close - prev_close
+    return StockInfo(
+        code=code, name=name, price=close,
+        change_pct=round((change_amount / prev_close * 100) if prev_close else 0, 2),
+        change_amount=round(change_amount, 2),
+        open=float(latest.get("开盘", 0)), pre_close=prev_close,
+        high=float(latest.get("最高", 0)), low=float(latest.get("最低", 0)),
+        volume=float(latest.get("成交量", 0)),
+        amount=float(latest.get("成交额", 0)) if "成交额" in df.columns else 0,
+    )
+
+
+def get_stock_info(code: str) -> Optional[StockInfo]:
+    """获取股票行情信息，优先复用共享日 K 缓存。"""
+    code = _normalize_code(code)
     try:
-        # 主力：从 K 线最新数据构造（稳定可靠）
-        start = (datetime.datetime.now() - datetime.timedelta(days=10)).strftime("%Y%m%d")
-        end = datetime.datetime.now().strftime("%Y%m%d")
-        df = _fetch_kline(code, "daily", start, end)
-
-        if df.empty:
-            return None
-
-        latest = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else latest
-
-        close = float(latest.get("收盘", 0))
-        prev_close = float(prev.get("收盘", 0))
-        change_amount = close - prev_close
-        change_pct = (change_amount / prev_close * 100) if prev_close else 0
-
-        info = StockInfo(
-            code=code,
-            name=name,
-            price=close,
-            change_pct=round(change_pct, 2),
-            change_amount=round(change_amount, 2),
-            open=float(latest.get("开盘", 0)),
-            pre_close=prev_close,
-            high=float(latest.get("最高", 0)),
-            low=float(latest.get("最低", 0)),
-            volume=float(latest.get("成交量", 0)),
-            amount=float(latest.get("成交额", 0)) if "成交额" in df.columns else 0,
-        )
-        return info
+        df = _get_cached_daily_kline(code, 300)
+        return _stock_info_from_kline(code, df, _get_stock_name_from_cache(code))
     except Exception as e:
         print(f"获取股票 {code} 行情（K线）失败: {e}")
         return None
@@ -305,10 +342,7 @@ def get_kline_data(code: str, period: str = "daily", days: int = 250) -> Optiona
     """
     code = _normalize_code(code)
     try:
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=days + 50)).strftime("%Y%m%d")
-        end_date = datetime.datetime.now().strftime("%Y%m%d")
-
-        df = _fetch_kline(code, "daily", start_date, end_date)
+        df = _get_cached_daily_kline(code, max(days + 50, 300))
 
         if df.empty:
             return None
@@ -482,7 +516,7 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 
-def get_financial_data(code: str) -> Optional[FinancialData]:
+def _fetch_financial_data(code: str) -> Optional[FinancialData]:
     """
     获取财务数据（多数据源 fallback）
     估值指标：stock_value_em（主力）
@@ -615,6 +649,22 @@ def get_financial_data(code: str) -> Optional[FinancialData]:
     except Exception as e:
         print(f"获取股票 {code} 财务数据失败: {e}")
         return result
+def get_financial_data(code: str) -> Optional[FinancialData]:
+    """获取财务数据，使用短 TTL 缓存减少详情页并发请求。"""
+    code = _normalize_code(code)
+    now = time.monotonic()
+    with _FINANCIAL_CACHE_LOCK:
+        cached = _FINANCIAL_CACHE.get(code)
+        if cached and now - cached["fetched_at"] < _FINANCIAL_CACHE_DURATION:
+            return cached["data"]
+    try:
+        data = _fetch_financial_data(code)
+    except Exception as e:
+        print(f"获取股票 {code} 财务数据失败: {e}")
+        return None
+    with _FINANCIAL_CACHE_LOCK:
+        _FINANCIAL_CACHE[code] = {"fetched_at": time.monotonic(), "data": data}
+    return data
 
 
 def _calc_macd(closes, fast=12, slow=26, signal=9):

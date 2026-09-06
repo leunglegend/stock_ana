@@ -9,6 +9,22 @@ from app.config import settings
 from app.models.schemas import StockInfo, KLineData, FinancialData
 
 
+DECISION_REPORT_SYSTEM_PROMPT = """你是严谨的A股决策分析师。仅依据用户提供的行情、日K线、财务指标和确定性技术信号生成结构化决策报告。
+必须只返回一个严格 JSON 对象，不要 Markdown 代码围栏，不要额外文字。不得编造新闻、情绪、公告、资金流、盈利预期或最新动态；这些字段没有输入时必须返回 null 或明确的 unavailable 状态。关键价位只能从给定 K 线推导，无法可靠推导则返回 null。结论必须包含风险、失效条件和数据限制。报告仅供参考，不构成投资建议。
+
+JSON 字段：
+{
+  "conclusion": {"action":"buy|hold|sell", "label":"强烈买入|买入|观望|减仓|卖出", "score":0, "rationale":""},
+  "trend": {"label":"", "phase":"", "summary":""},
+  "levels": {"support":null, "resistance":null, "entry_low":null, "entry_high":null, "stop_loss":null, "target_price":null},
+  "risks": [], "catalysts": [],
+  "sentiment": {"status":"unavailable", "summary":"当前未接入新闻/情绪数据"},
+  "fundamentals": {"summary":""},
+  "latest_developments": {"status":"unavailable", "summary":"当前未接入公告与最新动态数据"},
+  "checklist": [],
+  "analysis_markdown":""
+}
+"""
 SYSTEM_PROMPT = """你是一位资深的证券分析师，擅长A股市场的基本面分析和技术面分析。
 请根据提供的股票数据，给出专业、客观、有深度的投资分析报告。
 
@@ -168,6 +184,114 @@ def _get_sync_client():
         api_key=api_key,
     )
 
+
+async def generate_decision_report(
+    stock_info: StockInfo,
+    kline_data: KLineData,
+    financial: FinancialData,
+    signals: list[dict],
+) -> dict:
+    """生成并规范化结构化个股决策报告。"""
+    if not settings.ai_available:
+        raise RuntimeError("AI 决策报告服务暂不可用：未配置 API Key 和模型")
+
+    prompt = _build_decision_report_prompt(stock_info, kline_data, financial, signals)
+    try:
+        client = _get_client()
+        message = await client.messages.create(
+            model=settings.ARK_MODEL,
+            # 决策报告为结构化 JSON 输出，无需深度思考。显式关闭 thinking：
+            # DeepSeek 等推理模型默认会把 max_tokens 全部消耗在思考块上，导致
+            # TextBlock 为空、最终解析失败（stop_reason=max_tokens）。
+            thinking={"type": "disabled"},
+            max_tokens=4000,
+            system=DECISION_REPORT_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(getattr(block, "text", "") or "" for block in message.content)
+        data = _extract_json(text)
+        if not isinstance(data, dict):
+            # 部分模型会先把完整答案写在 thinking 块中而 TextBlock 为空，兜底解析 thinking
+            thinking = "".join(getattr(block, "thinking", "") or "" for block in message.content)
+            data = _extract_json(thinking) if thinking else None
+        if not isinstance(data, dict):
+            raise ValueError("AI 返回的决策报告不是有效 JSON")
+        return _normalize_decision_report(data)
+    except Exception as exc:
+        print(f"AI 决策报告错误: {exc}")
+        raise RuntimeError(f"AI 决策报告生成失败：{exc}") from exc
+
+
+def _build_decision_report_prompt(stock_info, kline_data, financial, signals) -> str:
+    rows = kline_data.kline if kline_data else []
+    recent = [
+        {"date": row.date, "open": row.open, "high": row.high, "low": row.low,
+         "close": row.close, "ma5": row.ma5, "ma10": row.ma10, "ma20": row.ma20,
+         "dif": row.dif, "dea": row.dea, "rsi6": row.rsi6}
+        for row in rows[-60:]
+    ]
+    return json.dumps({
+        "stock": stock_info.model_dump(),
+        "financial": financial.model_dump() if financial else {},
+        "technical_signals": signals,
+        "daily_bars": recent,
+        "constraints": [
+            "仅使用以上数据；新闻、情绪、公告、资金流和盈利预期均未提供",
+            "无法由数据支持的字段必须为 null 或 unavailable",
+            "关键价位必须说明是基于历史 K 线的估算，不得伪造精确预测",
+        ],
+    }, ensure_ascii=False, indent=2)
+
+
+def _normalize_decision_report(data: dict) -> dict:
+    conclusion = data.get("conclusion") if isinstance(data.get("conclusion"), dict) else {}
+    score = _bounded_int(conclusion.get("score"), 0)
+    label = str(conclusion.get("label") or "观望")
+    action = str(conclusion.get("action") or "hold").lower()
+    if action not in {"buy", "hold", "sell"}:
+        action = _action_from_label(label)
+    if action == "hold" and label in {"强烈买入", "买入", "减仓", "卖出"}:
+        action = _action_from_label(label)
+    return {
+        "conclusion": {"action": action, "label": label, "score": score,
+                       "rationale": _text(conclusion.get("rationale"))},
+        "trend": _dict(data.get("trend")),
+        "levels": _dict(data.get("levels")),
+        "risks": _texts(data.get("risks")),
+        "catalysts": _texts(data.get("catalysts")),
+        "sentiment": _dict(data.get("sentiment"), {"status": "unavailable", "summary": "当前未接入新闻/情绪数据"}),
+        "fundamentals": _dict(data.get("fundamentals")),
+        "latest_developments": _dict(data.get("latest_developments"), {"status": "unavailable", "summary": "当前未接入公告与最新动态数据"}),
+        "checklist": _texts(data.get("checklist")),
+        "analysis_markdown": _text(data.get("analysis_markdown")),
+    }
+
+
+def _action_from_label(label: str) -> str:
+    if label in {"强烈买入", "买入"}:
+        return "buy"
+    if label in {"减仓", "卖出"}:
+        return "sell"
+    return "hold"
+
+
+def _bounded_int(value, default: int) -> int:
+    try:
+        return max(0, min(100, int(float(value))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _text(value) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _texts(value) -> list[str]:
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()] if isinstance(value, list) else []
+
+
+def _dict(value, default=None) -> dict:
+    return dict(value) if isinstance(value, dict) else dict(default or {})
 
 async def analyze_stock_stream(
     stock_info: StockInfo,

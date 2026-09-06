@@ -27,7 +27,12 @@ export function getFinancialData(code) {
     .then(res => res.data)
 }
 
-// 行业板块列表
+// 个股 AI 决策报告
+export function getStockDecisionReport(code) {
+  return http.get(`/stock/${code}/decision-report`)
+    .then(res => res.data)
+}
+
 export function getBoardIndustry() {
   return http.get('/board/industry')
     .then(res => res.data)

@@ -14,12 +14,15 @@
 
         <aside class="stock-detail-page__research">
           <QuoteFacts v-if="stockInfo" :stock="stockInfo" />
-          <el-tabs v-model="activeTab" class="stock-detail-page__tabs">
+          <el-tabs v-model="activeTab" class="stock-detail-page__tabs" @tab-change="handleTabChange">
             <el-tab-pane label="财务" name="financial">
               <StatusState v-if="financialState === 'loading'" state="loading" title="正在读取财务字段" description="只显示财务接口返回的真实字段。" :min-height="260" />
               <StatusState v-else-if="financialState === 'error'" state="error" title="财务数据加载失败" description="当前无法读取财务数据，可重新尝试。" :min-height="260" @retry="loadFinancial" />
               <StatusState v-else-if="financialState === 'empty'" state="empty" title="暂无财务数据" description="该股票当前没有返回财务字段。" :min-height="260" />
               <FinancialCard v-else :financial="financial" :loading="false" />
+            </el-tab-pane>
+            <el-tab-pane label="决策报告" name="decision">
+              <DecisionReport :report="decisionReport" :state="decisionState" :error-message="decisionErrorMessage" @retry="loadDecisionReport" />
             </el-tab-pane>
             <el-tab-pane label="AI 分析" name="ai">
               <AiAdvice :code="String(code || '')" :advice="aiAdvice" :state="aiState" :error-message="aiErrorMessage" @start-analyze="startAnalyze" />
@@ -36,13 +39,14 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
-import { analyzeStock, getFinancialData, getKlineData, getStockInfo } from '@/api/stock'
+import { analyzeStock, getFinancialData, getKlineData, getStockDecisionReport, getStockInfo } from '@/api/stock'
 import AiAdvice from '@/components/AiAdvice.vue'
 import FinancialCard from '@/components/FinancialCard.vue'
 import KLineChart from '@/components/KLineChart.vue'
 import StatusState from '@/components/base/StatusState.vue'
 import GroupPicker from '@/components/watchlist/GroupPicker.vue'
 import QuoteFacts from '@/components/stock/QuoteFacts.vue'
+import DecisionReport from '@/components/stock/DecisionReport.vue'
 import StockHeader from '@/components/stock/StockHeader.vue'
 import { useWatchlistStore } from '@/store'
 import { useUserStore } from '@/store/user'
@@ -65,14 +69,20 @@ const klineLoading = ref(false)
 const quoteError = ref(false)
 const klineError = ref(false)
 const financialState = ref('idle')
+const decisionReport = ref(null)
+const decisionState = ref('idle')
+const decisionErrorMessage = ref('')
 const pickerVisible = ref(false)
 const selectedGroupId = ref('')
 let aiSource = null
 let pageGeneration = 0
+let aiRequestId = 0
 let quoteRequestId = 0
 let klineRequestId = 0
 let financialRequestId = 0
-let aiRequestId = 0
+let decisionRequestId = 0
+let financialLoaded = false
+let decisionLoaded = false
 const isWatched = computed(() => watchlistStore.isWatched(code.value))
 
 function isCurrentRequest(generation, requestId, latestId, targetCode, targetPeriod = '') {
@@ -102,7 +112,11 @@ function resetPageState() {
   klineLoading.value = false
   quoteError.value = false
   klineError.value = false
-  financialState.value = 'idle'
+  decisionReport.value = null
+  decisionState.value = 'idle'
+  decisionErrorMessage.value = ''
+  financialLoaded = false
+  decisionLoaded = false
   pickerVisible.value = false
 }
 
@@ -143,7 +157,12 @@ async function loadKline(generation = pageGeneration) {
   }
 }
 
-async function loadFinancial(generation = pageGeneration) {
+function loadFinancial(generation = pageGeneration) {
+  financialLoaded = true
+  return loadFinancialRequest(generation)
+}
+
+async function loadFinancialRequest(generation = pageGeneration) {
   const requestId = ++financialRequestId
   const targetCode = code.value
   financialState.value = 'loading'
@@ -159,6 +178,29 @@ async function loadFinancial(generation = pageGeneration) {
   }
 }
 
+function loadDecisionReport(generation = pageGeneration) {
+  decisionLoaded = true
+  return loadDecisionReportRequest(generation)
+}
+
+async function loadDecisionReportRequest(generation = pageGeneration) {
+  if (!code.value) return
+  const requestId = ++decisionRequestId
+  const targetCode = code.value
+  decisionState.value = 'loading'
+  decisionErrorMessage.value = ''
+  try {
+    const data = await getStockDecisionReport(targetCode)
+    if (!isCurrentRequest(generation, requestId, decisionRequestId, targetCode)) return
+    decisionReport.value = data
+    decisionState.value = data ? 'success' : 'empty'
+  } catch (error) {
+    if (!isCurrentRequest(generation, requestId, decisionRequestId, targetCode)) return
+    decisionReport.value = null
+    decisionState.value = 'error'
+    decisionErrorMessage.value = error?.response?.data?.detail || '当前无法生成决策报告，请稍后重试'
+  }
+}
 function handlePeriodChange(period) {
   if (period === klinePeriod.value) return
   klinePeriod.value = period
@@ -244,9 +286,16 @@ async function confirmAddToGroup(groupId) {
 function loadPage() {
   const generation = ++pageGeneration
   resetPageState()
-  loadQuote(generation)
-  loadKline(generation)
-  loadFinancial(generation)
+  const primaryRequests = [loadQuote(generation), loadKline(generation)]
+  Promise.all(primaryRequests).then(() => {
+    if (generation !== pageGeneration || activeTab.value !== 'financial' || financialLoaded) return
+    loadFinancial(generation)
+  })
+}
+
+function handleTabChange(tabName) {
+  if (tabName === 'financial' && !financialLoaded) loadFinancial(pageGeneration)
+  if (tabName === 'decision' && !decisionLoaded) loadDecisionReport(pageGeneration)
 }
 
 watch(code, (nextCode, prevCode) => {

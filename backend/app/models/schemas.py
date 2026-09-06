@@ -1,8 +1,8 @@
 """
 数据模型定义
 """
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import Any, List, Optional
 
 
 class StockInfo(BaseModel):
@@ -73,8 +73,36 @@ class StockSearchItem(BaseModel):
     name: str
 
 
-class AnalyzeRequest(BaseModel):
-    """分析请求"""
+class StockDecisionConclusion(BaseModel):
+    """个股决策结论。"""
+    action: str = "hold"
+    label: str = "观望"
+    score: int = 0
+    rationale: str = ""
+
+
+class StockDecisionReport(BaseModel):
+    """按当前行情生成的临时结构化决策报告。"""
+    code: str
+    name: str
+    generated_at: str
+    as_of: Optional[str] = None
+    conclusion: StockDecisionConclusion
+    trend: dict[str, Any] = Field(default_factory=dict)
+    levels: dict[str, Any] = Field(default_factory=dict)
+    risks: List[str] = Field(default_factory=list)
+    catalysts: List[str] = Field(default_factory=list)
+    sentiment: dict[str, Any] = Field(default_factory=dict)
+    fundamentals: dict[str, Any] = Field(default_factory=dict)
+    latest_developments: dict[str, Any] = Field(default_factory=dict)
+    checklist: List[str] = Field(default_factory=list)
+    signals: List[dict[str, Any]] = Field(default_factory=list)
+    analysis_markdown: str = ""
+    data_quality: dict[str, Any] = Field(default_factory=dict)
+
+
+class DecisionReportRequest(BaseModel):
+    """决策报告请求模型（保留扩展入口）。"""
     code: str
 
 
