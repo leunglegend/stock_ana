@@ -1,6 +1,23 @@
 """
 FastAPI 主入口
 """
+import socket
+
+# 强制优先 IPv4：在海外网络（如泰国）访问国内数据源时，部分接口
+# （东方财富历史K线、深交所等）走 IPv6 会失败（空响应/SSL 错误），
+# 而 IPv4 可达。默认的 getaddrinfo 在 AF_UNSPEC 时收敛为 IPv4，
+# 避免 AKShare 底层偶发选择 IPv6 导致数据源不可用。
+if not getattr(socket, "_stock_ana_ipv4_patched", False):
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _getaddrinfo_ipv4(host, port, family=socket.AF_UNSPEC, *args, **kwargs):
+        if family == socket.AF_UNSPEC:
+            family = socket.AF_INET
+        return _orig_getaddrinfo(host, port, family, *args, **kwargs)
+
+    socket.getaddrinfo = _getaddrinfo_ipv4
+    socket._stock_ana_ipv4_patched = True
+
 import logging
 
 from fastapi import FastAPI

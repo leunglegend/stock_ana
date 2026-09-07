@@ -89,13 +89,59 @@ def _retry(max_retries=3, delay=1):
     return decorator
 
 
-@_retry(max_retries=2, delay=1)
 def _fetch_stock_list():
-    """从 AKShare 获取股票列表（带重试）"""
+    """获取 A 股股票列表（多源容错）
+
+    海外网络下深交所(www.szse.cn)可能 SSL 失败、东财全A股分页接口较慢但可用。
+    依次尝试上交所 + 深交所，若沪深任一缺失则用东财全 A 股兜底补全。
+    """
     ak = _get_ak()
-    sh_df = ak.stock_info_sh_name_code(symbol="主板A股")
-    sz_df = ak.stock_info_sz_name_code(symbol="A股列表")
-    return sh_df, sz_df
+    stocks = []
+    errors = []
+
+    # 数据源1：上交所主板 A 股
+    try:
+        sh_df = ak.stock_info_sh_name_code(symbol="主板A股")
+        if sh_df is not None and not sh_df.empty:
+            for _, row in sh_df.iterrows():
+                code = str(row.get("证券代码", "")).strip()
+                name = str(row.get("证券简称", "")).strip()
+                if code:
+                    stocks.append({"code": code, "name": name})
+    except Exception as e:
+        errors.append(f"上交所:{e}")
+
+    # 数据源2：深交所 A 股
+    try:
+        sz_df = ak.stock_info_sz_name_code(symbol="A股列表")
+        if sz_df is not None and not sz_df.empty:
+            for _, row in sz_df.iterrows():
+                code = str(row.get("A股代码", "")).strip()
+                name = str(row.get("A股简称", "")).strip()
+                if code:
+                    stocks.append({"code": code, "name": name})
+    except Exception as e:
+        errors.append(f"深交所:{e}")
+
+    # 数据源3：东财全 A 股兜底（覆盖沪深；海外时上/深交所可能不可用，虽慢但可靠）
+    has_sh = any(s["code"].startswith("6") for s in stocks)
+    has_sz = any(s["code"].startswith(("0", "3")) for s in stocks)
+    if not (has_sh and has_sz):
+        try:
+            df = ak.stock_info_a_code_name()
+            if df is not None and not df.empty:
+                seen = {s["code"] for s in stocks}
+                for _, row in df.iterrows():
+                    code = str(row.get("code", "")).strip()
+                    name = str(row.get("name", "")).strip()
+                    if code and code not in seen:
+                        stocks.append({"code": code, "name": name})
+        except Exception as e:
+            errors.append(f"东财全A股:{e}")
+
+    if not stocks:
+        raise RuntimeError(f"所有股票列表数据源均失败: {'; '.join(errors)}")
+    return stocks
 
 
 def _get_stock_list():
@@ -113,23 +159,14 @@ def _get_stock_list():
             if (now - _cache_time).total_seconds() < _CACHE_DURATION:
                 return _stock_list_cache
         try:
-            sh_df, sz_df = _fetch_stock_list()
-            stocks = []
-            for _, row in sh_df.iterrows():
-                stocks.append({
-                    "code": str(row.get("证券代码", "")).strip(),
-                    "name": str(row.get("证券简称", "")).strip(),
-                })
-            for _, row in sz_df.iterrows():
-                stocks.append({
-                    "code": str(row.get("A股代码", "")).strip(),
-                    "name": str(row.get("A股简称", "")).strip(),
-                })
+            stocks = _fetch_stock_list()
             _stock_list_cache = stocks
             _cache_time = now
             return stocks
         except Exception as e:
             print(f"获取股票列表失败: {e}")
+            if _stock_list_cache is not None:
+                return _stock_list_cache
             return []
 
 
