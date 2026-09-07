@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/board", tags=["板块"])
 @router.get("/industry", response_model=List[BoardInfo], summary="行业板块列表")
 async def get_industry_boards():
     """获取行业板块涨跌幅排行（内存缓存，毫秒级响应）"""
-    data = get_industry_boards_cached()
+    data = await run_in_threadpool(get_industry_boards_cached)
     if not data:
         raise HTTPException(status_code=503, detail="行业板块数据获取失败，请稍后重试")
     return data
@@ -31,7 +31,7 @@ async def get_industry_boards():
 @router.get("/concept", response_model=List[BoardInfo], summary="概念板块列表")
 async def get_concept_boards():
     """获取概念板块涨跌幅排行（内存缓存，毫秒级响应）"""
-    data = get_concept_boards_cached()
+    data = await run_in_threadpool(get_concept_boards_cached)
     if not data:
         raise HTTPException(status_code=503, detail="概念板块数据获取失败，请稍后重试")
     return data
@@ -56,7 +56,7 @@ async def get_board_stocks(board_type: str, board_name: str):
 @router.get("/market/summary", response_model=MarketSummary, summary="市场概览")
 async def get_market_summary():
     """获取大盘指数、涨跌家数等市场概况（内存缓存，毫秒级响应）"""
-    data = get_market_summary_cached()
+    data = await run_in_threadpool(get_market_summary_cached)
     if not data:
         raise HTTPException(status_code=503, detail="市场数据获取失败")
     return data
@@ -71,8 +71,8 @@ async def get_market_ai_summary():
         yield format_sse_data("🤖 AI 正在分析市场数据...")
 
         # 获取市场数据
-        summary = get_market_summary_cached()
-        boards = get_industry_boards_cached()
+        summary = await run_in_threadpool(get_market_summary_cached)
+        boards = await run_in_threadpool(get_industry_boards_cached)
 
         if not summary:
             yield format_sse_data("❌ 市场数据获取失败，请稍后重试")
