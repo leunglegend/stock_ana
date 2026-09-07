@@ -1,6 +1,6 @@
 <template>
   <section class="market-ai__band" :aria-busy="loading">
-    <strong class="market-ai__label">AI 盘面结论</strong>
+    <span class="market-ai__label">{{ label }}</span>
     <p v-if="text" class="market-ai__text">{{ text }}</p>
     <p v-else-if="error" class="market-ai__placeholder">AI 点评暂时不可用，可稍后重试。</p>
     <p v-else class="market-ai__placeholder">需要时再触发 AI 点评。</p>
@@ -24,6 +24,10 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  label: {
+    type: String,
+    default: 'AI 盘面结论', // 向后兼容默认
+  },
 })
 
 defineEmits(['refresh'])
@@ -41,7 +45,7 @@ defineEmits(['refresh'])
   background: var(--surface-panel-muted);
 }
 
-.market-ai__label { font-size: var(--font-size-sm); }
+.market-ai__label { font-size: var(--font-size-sm); font-weight: 600; }
 .market-ai__text,
 .market-ai__placeholder {
   margin: 0;

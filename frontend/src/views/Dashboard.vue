@@ -45,10 +45,21 @@
     </section>
 
     <MarketAiSummary class="dashboard-page__ai-band" :text="aiSummary" :loading="aiLoading" :error="aiError" @refresh="generateAiSummary" />
+
+    <UsSnapshotCard
+      class="dashboard-page__us-card"
+      :summary="cardData"
+      :loading="cardLoading"
+      :error="cardError"
+      @retry="retryCard"
+      @open="router.push('/us')"
+      @sector="(name) => router.push({ path: '/us', query: { sector: name } })"
+    />
   </div>
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import StatusState from '@/components/base/StatusState.vue'
@@ -58,8 +69,10 @@ import MarketBreadth from '@/components/dashboard/MarketBreadth.vue'
 import MarketBreadthFacts from '@/components/dashboard/MarketBreadthFacts.vue'
 import MarketIndices from '@/components/dashboard/MarketIndices.vue'
 import TopBoards from '@/components/dashboard/TopBoards.vue'
+import UsSnapshotCard from '@/components/dashboard/UsSnapshotCard.vue'
 import WatchlistSnapshot from '@/components/dashboard/WatchlistSnapshot.vue'
 import { useDashboardMarket } from '@/composables/useDashboardMarket'
+import { useUsCard } from '@/composables/useUsCard'
 
 const router = useRouter()
 const {
@@ -83,6 +96,17 @@ const {
   retryWatchStock,
   generateAiSummary,
 } = useDashboardMarket()
+
+// 美股收盘卡片：仅读取当日美股收盘快照，不做轮询，进入工作台时拉取一次
+const { cardData, cardLoading, cardError, loadCard, retryCard } = useUsCard()
+
+async function loadUsCard() {
+  try {
+    await loadCard()
+  } catch {}
+}
+
+onMounted(loadUsCard)
 
 function openLogin() { window.dispatchEvent(new CustomEvent('show-login')) }
 function openBoard(board) { router.push({ path: '/board', query: { type: 'industry', name: board.name } }) }
@@ -153,6 +177,7 @@ function openStock(code) { router.push(`/stock/${code}`) }
 .dashboard-page__inspector{display:grid;grid-template-rows:minmax(0,1fr) auto;min-width:0;border-left:1px solid var(--border-default)}
 .dashboard-page__inspector :deep(.section-panel){border:0;border-radius:0}.dashboard-page__inspector :deep(.market-breadth-facts){border-top:1px solid var(--border-subtle)}
 .dashboard-page__ai-band { border-inline: 0; }
+.dashboard-page__us-card { border-top: 0; }
 
 @media (max-width: 767px) {
   .dashboard-page__header { align-items: center; }

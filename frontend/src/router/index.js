@@ -34,6 +34,14 @@ const routes = [
     meta: { title: '板块监控', icon: 'DataAnalysis' },
   },
   {
+    path: '/us',
+    name: 'UsMarket',
+    component: () => import('../views/UsMarket.vue'),
+    meta: { title: '美股复盘', icon: 'Globe' },
+  },
+  // 二期：美股个股详情占位（本期不实现）
+  // { path: '/us/stock/:symbol', name: 'UsStockDetail', component: () => import('../views/UsStockDetail.vue'), meta: { hidden: true } },
+  {
     path: '/radar',
     name: 'Radar',
     component: () => import('../views/OpportunityRadar.vue'),
