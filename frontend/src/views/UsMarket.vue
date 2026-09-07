@@ -38,16 +38,26 @@
       @refresh="generateAiSummary"
     />
 
+    <UsSectorToolbar
+      v-model:keyword="keyword"
+      v-model:sort-key="sortKey"
+      v-model:page="page"
+      :page-size="pageSize"
+      :total="filteredSectors.length"
+    />
+
     <section class="us-market-page__workspace workbench-grid workbench-grid--primary">
-      <UsSectorTable
-        class="us-market-page__sectors"
-        :sectors="sectorsData"
-        :loading="sectorsLoading"
-        :error="sectorsError"
-        :selected-name="selected ? selected.name : ''"
-        @select="selectSector"
-        @retry="runSectors"
-      />
+      <div class="us-market-page__list">
+        <UsSectorTable
+          class="us-market-page__sectors"
+          :sectors="paginatedSectors"
+          :loading="sectorsLoading"
+          :error="sectorsError"
+          :selected-name="selected ? selected.name : ''"
+          @select="selectSector"
+          @retry="runSectors"
+        />
+      </div>
       <UsSectorDetailPanel
         :visible="!!selected"
         :loading="stocksLoading"
@@ -75,6 +85,8 @@ import UsAiBand from '@/components/us/UsAiBand.vue'
 import UsIndexStrip from '@/components/us/UsIndexStrip.vue'
 import UsSectorDetailPanel from '@/components/us/UsSectorDetailPanel.vue'
 import UsSectorTable from '@/components/us/UsSectorTable.vue'
+import UsSectorToolbar from '@/components/us/UsSectorToolbar.vue'
+import { useUsBoardList } from '@/composables/useUsBoardList'
 import { useAsyncSection } from '@/composables/useAsyncSection'
 import { useResponsive } from '@/composables/useResponsive'
 import { useUsMarket } from '@/composables/useUsMarket'
@@ -94,6 +106,7 @@ const summaryPending = computed(() => summarySection.isIdle.value || summaryLoad
 const sectorsData = sectorsSection.data
 const sectorsLoading = sectorsSection.isLoading
 const sectorsError = sectorsSection.isError
+const { keyword, sortKey, page, pageSize, filteredSectors, paginatedSectors } = useUsBoardList(sectorsData)
 
 const selected = ref(null)
 // 闭包带参 fetcher：仅在 selectSector 时 run（useAsyncSection 内置 requestId 防串号）
@@ -190,7 +203,7 @@ onUnmounted(() => closeAiSource())
 
 .us-market-page__header { min-width: 0; }
 .us-market-page__heading { display: grid; gap: 2px; min-width: 0; }
-.us-market-page__title { margin: 0; color: var(--text-primary); line-height: 1.3; }
+.us-market-page__title { margin: 0; color: var(--text-primary); font-size: var(--font-size-2xl); line-height: 1.2; }
 .us-market-page__meta { margin: 0; color: var(--text-tertiary); font-size: var(--font-size-xs); }
 
 .us-market-page__summary { min-width: 0; }
@@ -208,8 +221,9 @@ onUnmounted(() => closeAiSource())
 .us-market-page__workspace > :deep(.us-sector-detail),
 .us-market-page__sectors { min-width: 0; border: 0; border-radius: 0; }
 
-.us-market-page__sectors {
+.us-market-page__list {
   display: grid;
+  min-width: 0;
   border-right: 1px solid var(--border-default);
 }
 
@@ -222,7 +236,7 @@ onUnmounted(() => closeAiSource())
     border-radius: 0;
   }
 
-  .us-market-page__sectors {
+  .us-market-page__list {
     border: 1px solid var(--border-default);
     border-radius: var(--radius-panel);
     overflow: hidden;

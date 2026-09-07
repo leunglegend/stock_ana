@@ -3,6 +3,7 @@
     :is="detailContainer"
     v-bind="containerProps"
     class="board-detail"
+    :class="{ 'board-detail--us': market === 'us' }"
     @close="$emit('close')"
   >
     <template v-if="mobile" #header>
@@ -18,7 +19,7 @@
       <StatusState
         state="empty"
         title="选择一个板块查看成分股"
-        description="从左侧列表选择行业或概念板块，详情将在此处展开。"
+        :description="market === 'us' ? '从左侧列表选择行业板块，详情将在此处展开。' : '从左侧列表选择行业或概念板块，详情将在此处展开。'"
         :min-height="260"
       />
     </template>
@@ -37,11 +38,11 @@
       </div>
 
       <div v-if="visible && board" class="board-detail__facts" aria-label="板块概览">
-        <div class="board-detail__fact">
+        <div v-if="market !== 'us'" class="board-detail__fact">
           <span class="board-detail__fact-label">总成交额</span>
           <strong>{{ formatYi(board.total_turnover) }}</strong>
         </div>
-        <div class="board-detail__fact">
+        <div v-if="market !== 'us'" class="board-detail__fact">
           <span class="board-detail__fact-label">换手率</span>
           <strong>{{ formatPercent(board.turnover_rate, 2, false) }}</strong>
         </div>
@@ -69,7 +70,7 @@
         <el-select v-model="stockSortKey" class="board-detail__sort" aria-label="成分股排序方式">
           <el-option label="按涨跌幅" value="change_pct" />
           <el-option label="按价格" value="price" />
-          <el-option label="按换手率" value="turnover_rate" />
+          <el-option v-if="market !== 'us'" label="按换手率" value="turnover_rate" />
         </el-select>
       </div>
 
@@ -120,20 +121,21 @@
           </div>
 
           <div class="board-detail__metrics">
-            <span class="board-detail__metric">
+            <span v-if="market !== 'us'" class="board-detail__metric">
               <span class="board-detail__metric-label">换手率</span>
               <span>{{ formatPercent(stock.turnover_rate, 2, false) }}</span>
             </span>
-            <span class="board-detail__metric">
+            <span v-if="market !== 'us'" class="board-detail__metric">
               <span class="board-detail__metric-label">PE</span>
               <span>{{ formatPeValue(stock.pe) }}</span>
             </span>
-            <span class="board-detail__metric">
+            <span v-if="market !== 'us'" class="board-detail__metric">
               <span class="board-detail__metric-label">市值</span>
               <span>{{ formatMv(stock.total_mv) }}</span>
             </span>
             <span class="board-detail__metric">
-              <span class="board-detail__metric-label">价格/涨跌</span>
+              <span v-if="market === 'us'" class="board-detail__metric-label">价格/涨跌（美元）</span>
+              <span v-else class="board-detail__metric-label">价格/涨跌</span>
               <PriceDisplay
                 :price="stock.price"
                 :change="stock.change_amount"
@@ -174,6 +176,7 @@ import StatusState from '../base/StatusState.vue'
 import { formatMv, formatPercent, formatYi, safeNumber } from '../../utils/format'
 
 const props = defineProps({
+  market: { type: String, default: 'a' },
   visible: {
     type: Boolean,
     default: false,
@@ -260,6 +263,9 @@ function stockSortValue(stock) {
 .board-detail:not(.el-drawer) .board-detail__header { padding: var(--spacing-3) var(--spacing-4); border-bottom: 1px solid var(--border-subtle); }
 .board-detail:not(.el-drawer) :deep(.status-state) { padding-inline: var(--spacing-4); }
 .board-detail__facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid var(--border-subtle); }
+.board-detail--us .board-detail__facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.board-detail--us .board-detail__metrics { grid-template-columns: minmax(0, 1fr); }
+.board-detail--us .board-detail__row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .board-detail__fact { display: grid; align-content: center; gap: var(--spacing-1); min-width: 0; min-height: 56px; padding: var(--spacing-2) var(--spacing-3); border-right: 1px solid var(--border-subtle); }
 .board-detail__fact:last-child { border-right: 0; }
 .board-detail__fact-label { color: var(--text-tertiary); font-size: var(--font-size-xs); }
@@ -282,6 +288,7 @@ function stockSortValue(stock) {
   .board-detail__fact { min-height: 52px; border-bottom: 1px solid var(--border-subtle); }
   .board-detail__fact:nth-child(2n) { border-right: 0; }
   .board-detail__fact:last-child { grid-column: span 2; border-bottom: 0; }
+  .board-detail--us .board-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .board-detail__tools { flex-wrap: wrap; }
   .board-detail__tools :deep(.el-input__wrapper), .board-detail__tools :deep(.el-select__wrapper) { min-height: 44px; touch-action: manipulation; }
   .board-detail__sort { flex: 1 1 140px; }

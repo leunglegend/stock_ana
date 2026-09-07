@@ -3,6 +3,7 @@
     <template #header>
       <div class="board-table__header">
         <h3 class="board-table__title">{{ title }}</h3>
+        <slot name="note" />
       </div>
     </template>
 
@@ -10,7 +11,7 @@
       v-if="loading"
       state="loading"
       title="正在加载板块列表"
-      description="行业与概念列表分开请求。"
+      :description="loadingDescription"
       :min-height="260"
     />
 
@@ -34,7 +35,7 @@
     <div v-else class="board-table__rows">
       <div class="board-table__columns" aria-hidden="true">
         <span>板块</span>
-        <span>成交额 / 换手 / 涨跌</span>
+        <span><slot name="columns">成交额 / 换手 / 涨跌</slot></span>
       </div>
       <button
         v-for="board in boards"
@@ -43,18 +44,20 @@
         type="button"
         @click="$emit('select', board)"
       >
-        <div>
-          <p class="board-table__name">{{ board.name }}</p>
+        <div class="board-table__identity">
+          <p class="board-table__name"><slot name="name" :board="board">{{ board.name }}</slot></p>
           <p class="board-table__desc">
             领涨 {{ board.leading_stock || '--' }} · 上涨 {{ board.rise_count ?? '--' }} / 下跌 {{ board.fall_count ?? '--' }}
           </p>
         </div>
 
         <div class="board-table__metrics">
-          <span class="board-table__metric">{{ formatYi(board.total_turnover) }}</span>
-          <span class="board-table__metric">
-            {{ board.turnover_rate == null ? '--' : formatPercent(board.turnover_rate, 2, false) }}
-          </span>
+          <slot name="metrics" :board="board">
+            <span class="board-table__metric">{{ formatYi(board.total_turnover) }}</span>
+            <span class="board-table__metric">
+              {{ board.turnover_rate == null ? '--' : formatPercent(board.turnover_rate, 2, false) }}
+            </span>
+          </slot>
           <PercentageDisplay :value="board.change_pct" size="sm" />
         </div>
       </button>
@@ -69,6 +72,7 @@ import StatusState from '../base/StatusState.vue'
 import { formatPercent, formatYi } from '../../utils/format'
 
 defineProps({
+  loadingDescription: { type: String, default: '行业与概念列表分开请求。' },
   title: {
     type: String,
     default: '板块列表',
@@ -107,6 +111,8 @@ defineEmits(['select', 'retry'])
   justify-content: space-between;
   gap: var(--spacing-4);
 }
+
+.board-table__identity { min-width: 0; }
 
 .board-table__desc {
   margin: 0;

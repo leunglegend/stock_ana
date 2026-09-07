@@ -147,10 +147,11 @@ router.beforeEach(async (to, from) => {
   return true
 })
 
-router.afterEach((to, _from, failure) => {
+router.afterEach((to, from, failure) => {
   if (failure) return
 
   updateDocumentTitle(to)
+  if (to.path === from.path) return
   window.requestAnimationFrame(() => {
     const title = document.querySelector('[data-page-title]')
     if (!(title instanceof HTMLElement)) return
