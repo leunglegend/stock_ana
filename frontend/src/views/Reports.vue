@@ -35,7 +35,7 @@
       <el-pagination
         v-if="total > pageSize && !isMobile"
         class="reports-page__pagination reports-page__pagination--top"
-        small
+        size="small"
         :layout="paginationLayout"
         :total="total"
         :page-size="pageSize"
@@ -67,7 +67,7 @@
     <div v-if="total > pageSize" class="reports-page__feedback">
       <el-pagination
         class="reports-page__pagination"
-        small
+        size="small"
         :layout="paginationLayout"
         :total="total"
         :page-size="pageSize"

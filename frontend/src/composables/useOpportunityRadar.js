@@ -1,7 +1,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { getBoardConcept, getBoardIndustry, getBoardStocks } from '@/api/stock'
 import { useResponsive } from '@/composables/useResponsive'
-import { buildRadarSummary, createRequestGate, createTimedCache, filterAndSortBoards, oldestTimestamp, paginateRows, resolveValidPage, sortBoardStocks } from '@/utils/opportunityRadar'
+import { buildRadarSummary, createRequestGate, createTimedCache, filterAndSortBoards, normalizeRadarError, oldestTimestamp, paginateRows, resolveValidPage, sortBoardStocks } from '@/utils/opportunityRadar'
 
 const CACHE_TTL_MS = 60_000
 const BOARD_PAGE_SIZE = 10
@@ -128,7 +128,7 @@ export function useOpportunityRadar() {
       return settled.data
     } catch (error) {
       if (!requestGate.isCurrent(channel, token)) throw error
-      record.error = error
+      record.error = normalizeRadarError(error)
       if (!keepPreviousData && !options.preserveData) record.data = []
       throw error
     } finally {
@@ -184,7 +184,7 @@ export function useOpportunityRadar() {
       return settled.data
     } catch (error) {
       if (!requestGate.isCurrent('stocks', token)) throw error
-      stockState.error = error
+      stockState.error = normalizeRadarError(error)
       if (!keepPreviousData && !options.preserveData) stockState.data = []
       throw error
     } finally {

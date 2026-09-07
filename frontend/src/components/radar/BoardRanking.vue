@@ -99,7 +99,7 @@
           :pager-count="5"
           background
           :layout="compact ? 'prev, next' : 'prev, pager, next'"
-          small
+          size="small"
           @update:current-page="$emit('page-change', $event)"
         />
       </div>

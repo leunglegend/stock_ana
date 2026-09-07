@@ -30,7 +30,7 @@
           :pager-count="isMobile ? 3 : 5"
           background
           :layout="isMobile ? 'prev, next' : 'prev, pager, next'"
-          small
+          size="small"
         />
         <span v-if="isMobile && filteredBoards.length > boardPageSize" class="board-page__page-state">
           第 {{ boardPage }} / {{ boardPageCount }} 页

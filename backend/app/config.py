@@ -2,9 +2,14 @@
 应用配置模块
 """
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 锚定到 backend/ 目录，避免因启动 cwd 不同而写出多个 stock_analyzer.db
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_DATABASE_URL = f"sqlite:///{BACKEND_DIR / 'stock_analyzer.db'}"
 
 
 class Settings:
@@ -26,7 +31,7 @@ class Settings:
     ]
 
     # 数据库配置
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./stock_analyzer.db")
+    database_url: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 
     # JWT 配置
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")

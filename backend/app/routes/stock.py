@@ -1,10 +1,10 @@
 """
 股票相关 API 路由
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from typing import List
+from typing import List, Literal
 
 from datetime import datetime, timezone
 
@@ -57,7 +57,11 @@ async def get_stock(code: str):
 
 
 @router.get("/{code}/kline", response_model=KLineData, summary="获取K线数据")
-async def get_kline(code: str, period: str = "daily", days: int = 250):
+async def get_kline(
+    code: str,
+    period: Literal["daily", "weekly", "monthly"] = "daily",
+    days: int = Query(250, ge=1, le=2500),
+):
     """
     获取K线数据
     - period: daily(日K), weekly(周K), monthly(月K)
@@ -120,6 +124,7 @@ async def get_decision_report(code: str):
     return result
 
 
+@router.get("/{code}/analyze", summary="AI 个股分析（SSE 流式）")
 async def analyze_stock(code: str):
     """
     AI 分析股票，SSE 流式返回分析结果

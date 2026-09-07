@@ -86,10 +86,10 @@ cd frontend && npm run dev    # http://localhost:5173，/api 代理到 52764
 
 ```bash
 # 后端（用 venv 直跑，避免环境差异）
-cd backend && venv/bin/python -m pytest tests/ -q        # 当前 45 passed
+cd backend && venv/bin/python -m pytest tests/ -q        # 当前 101 passed + 5 subtests
 
 # 前端契约测试（纯 node，不依赖 vite）
-cd frontend && node --test tests/*.test.js               # 当前 180 passed
+cd frontend && node --test tests/*.test.js               # 当前 198 passed
 ```
 
 ## 已知问题 & 坑（重要）
@@ -97,7 +97,7 @@ cd frontend && node --test tests/*.test.js               # 当前 180 passed
 1. **AI 配置被 shell 环境变量劫持**：本机 shell 全局设了 `ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic` + `ANTHROPIC_AUTH_TOKEN`（供 Claude Code 走 DeepSeek）。后端 `config.py` 用 `ARK_*` 优先、否则回退 `ANTHROPIC_*` → **实际连 DeepSeek 而非 README/.env.example 的火山引擎**。排查 AI 接口失败先 `env | grep -iE "ARK_|ANTHROPIC"`。要换供应商在 `backend/.env` 显式写 `ARK_API_KEY`/`ARK_BASE_URL`/`ARK_MODEL` 覆盖。
 2. **DeepSeek 是推理模型**：结构化输出（决策报告）必须显式 `thinking={"type":"disabled"}`，否则 max_tokens 全耗在 ThinkingBlock → TextBlock 空 →「不是有效 JSON」。诊断打印 `text_len=0`。
 3. **东财接口网络问题**：`*_em` 接口在部分网络 Connection reset，已做多源 fallback（东财 → 同花顺 → 旧缓存）。
-4. **async 路由不得直接同步调 AKShare**：会阻塞事件循环导致全部 /api 超时，必须 `run_in_threadpool`（test 分支已全覆盖，12 个调用点）。
+4. **async 路由不得直接同步调 AKShare**：会阻塞事件循环导致全部 /api 超时，必须 `run_in_threadpool`（板块成分股路由已补测，回归测试 test_board_route_not_blocking.py 守护）。
 5. **内存管理**：macOS low-memory 会杀后台任务（vite ~20MB、uvicorn ~18MB）。多 worktree 同时跑服务易被杀，优先只跑一条线的标准端口。
 6. 定时任务仅按周一到周五，不判节假日；JWT token 存 localStorage 为轻量方案。
 7. `decision-brief.preview.html` 是本地预览衍生品，不入库；`.claude/worktrees/` 与 `settings.local.json` 已被 .gitignore 忽略。

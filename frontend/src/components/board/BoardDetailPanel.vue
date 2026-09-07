@@ -154,7 +154,7 @@
           :pager-count="mobile ? 3 : 5"
           background
           :layout="mobile ? 'prev, next' : 'prev, pager, next'"
-          small
+          size="small"
         />
       </footer>
       <p v-else-if="filteredStocks.length" class="board-detail__total">共 {{ filteredStocks.length }} 只</p>

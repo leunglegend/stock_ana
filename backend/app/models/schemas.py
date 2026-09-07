@@ -111,7 +111,7 @@ class BoardInfo(BaseModel):
     name: str                          # 板块名称
     change_pct: float                  # 涨跌幅(%)
     change_amount: float = 0           # 涨跌额
-    total_turnover: float = 0          # 总市值/成交额
+    total_turnover: float = 0          # 总市值/总成交额（单位：亿）
     turnover_rate: float = 0           # 换手率(%)
     leading_stock: str = ""            # 领涨股
     leading_change: float = 0          # 领涨股涨跌幅(%)

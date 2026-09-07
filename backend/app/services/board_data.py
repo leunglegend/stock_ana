@@ -317,7 +317,8 @@ def _parse_board_em(df) -> List[BoardInfo]:
             name=name,
             change_pct=_get_float(row, "涨跌幅", "今日涨幅", "涨幅"),
             change_amount=_get_float(row, "涨跌额", "涨跌"),
-            total_turnover=_get_float(row, "总市值", "总成交额", "成交额"),
+            # 东财返回的是元，前端与 schema 口径统一为亿
+            total_turnover=_get_float(row, "总市值", "总成交额", "成交额") / 100000000,
             turnover_rate=_get_float(row, "换手率"),
             leading_stock=str(_get(row, "领涨股票", "领涨股", "领涨", "龙头股")).strip(),
             leading_change=_get_float(row, "领涨股涨跌幅", "领涨股涨幅", "领涨涨幅"),

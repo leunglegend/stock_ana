@@ -214,6 +214,11 @@ def generate_daily_report_for_user(
     # 1. 获取自选股
     stocks = watchlist_service.get_user_watchlist_stocks(db, user_id)
     if not stocks:
+        # 兜底：若已存在 pending/generating 记录（如创建后自选股被清空），
+        # 必须改为 failed，避免永远停在 pending。
+        existing = get_report_by_date(db, user_id, report_date)
+        if existing and existing.status in ("pending", "generating"):
+            update_report_status(db, existing.id, "failed", "暂无自选股，无法生成复盘报告")
         logger.info("用户 %s 没有自选股，跳过复盘生成", user_id)
         return None
 

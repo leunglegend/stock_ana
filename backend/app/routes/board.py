@@ -2,6 +2,7 @@
 板块相关 API 路由
 """
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from typing import List
 
@@ -46,7 +47,7 @@ async def get_board_stocks(board_type: str, board_name: str):
     if board_type not in ["industry", "concept"]:
         raise HTTPException(status_code=400, detail="board_type 必须是 industry 或 concept")
 
-    data = board_data.get_board_stocks(board_name, board_type)
+    data = await run_in_threadpool(board_data.get_board_stocks, board_name, board_type)
     if not data:
         raise HTTPException(status_code=503, detail="板块成分股获取失败")
     return data

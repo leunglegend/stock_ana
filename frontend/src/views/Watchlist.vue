@@ -43,7 +43,7 @@
             @open="openDetail" @edit="openEditDialog" @remove="handleRemoveStock" @retry="retryQuote" />
           <div v-if="filteredRows.length > pageSize" class="watchlist-page__pagination-row">
             <span class="watchlist-page__range">第 {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredRows.length) }} 项，共 {{ filteredRows.length }} 项</span>
-            <el-pagination class="watchlist-page__pagination" background :small="!isMobile" :layout="paginationLayout"
+            <el-pagination class="watchlist-page__pagination" background :size="isMobile ? 'default' : 'small'" :layout="paginationLayout"
               :total="filteredRows.length" :page-size="pageSize" :current-page="currentPage"
               @current-change="currentPage = $event" />
             <span v-if="isMobile" class="watchlist-page__page-status" aria-live="polite">第 {{ currentPage }} / {{ pageCount }} 页</span>

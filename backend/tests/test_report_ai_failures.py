@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 from app.services import ai_analyst, report_service
 
@@ -28,14 +28,16 @@ class ReportAiFailureTest(unittest.TestCase):
 
     def test_stock_report_ai_exception_is_not_returned_as_normal_content(self):
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))))
-        with patch.object(ai_analyst, "_get_sync_client", return_value=client), \
+        with patch.object(type(ai_analyst.settings), "ai_available", new_callable=PropertyMock, return_value=True), \
+                patch.object(ai_analyst, "_get_sync_client", return_value=client), \
                 patch.object(ai_analyst, "_build_stock_daily_prompt", return_value="prompt"):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 ai_analyst.generate_stock_daily_analysis("600519", "贵州茅台", SimpleNamespace(), None)
 
     def test_report_overview_ai_exception_is_not_returned_as_normal_content(self):
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))))
-        with patch.object(ai_analyst, "_get_sync_client", return_value=client):
+        with patch.object(type(ai_analyst.settings), "ai_available", new_callable=PropertyMock, return_value=True), \
+                patch.object(ai_analyst, "_get_sync_client", return_value=client):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 ai_analyst.generate_daily_report_overview([], None)
 

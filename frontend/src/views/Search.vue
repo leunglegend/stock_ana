@@ -29,7 +29,7 @@
         <el-pagination
           class="search-page__pagination"
           background
-          :small="!isMobile"
+          :size="isMobile ? 'default' : 'small'"
           :layout="paginationLayout"
           :total="results.length"
           :page-size="pageSize"

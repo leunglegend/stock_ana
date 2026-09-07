@@ -16,7 +16,7 @@ from app.schemas.report import (
     DailyReportListItem,
     PaginatedDailyReports,
 )
-from app.services import report_service, notification_service
+from app.services import report_service, notification_service, watchlist_service
 
 router = APIRouter(prefix="/api/reports", tags=["复盘报告"])
 
@@ -88,6 +88,10 @@ def generate_today(
         return {"success": True, "report_id": existing.id, "message": "今日报告已存在"}
     if existing and existing.status == "generating":
         return {"success": True, "report_id": existing.id, "message": "正在生成中..."}
+
+    # 无自选股时无法生成复盘：立即明确报错，不创建会永久 pending 的记录
+    if not watchlist_service.get_user_watchlist_stocks(db, current_user.id):
+        raise HTTPException(status_code=400, detail="暂无自选股，请先添加自选股后再生成今日复盘")
 
     # 先创建 pending 记录（确保在后台任务启动前已存在）
     report = report_service.create_pending_report(db, current_user.id, today)

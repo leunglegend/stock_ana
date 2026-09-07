@@ -2,6 +2,11 @@ export function normalizeOptionalMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+export function normalizeRadarError(error) {
+  if (error == null || error === false) return false
+  return typeof error === 'string' && error.trim() ? error : true
+}
+
 export function filterAndSortBoards(boards = [], options = {}) {
   const query = String(options.keyword || '').trim().toLowerCase()
   return boards
