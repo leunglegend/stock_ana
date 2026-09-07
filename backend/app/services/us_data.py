@@ -7,10 +7,14 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from app.models.schemas import UsConstituent, UsIndexQuote, UsSector, UsSummary
 from app.services import stock_data, us_universe
+
+BEIJING_TZ = ZoneInfo("Asia/Shanghai")
 
 # py_mini_racer（akshare 新浪美股接口内部用来跑 JS 解密的 V8 引擎）在多线程
 # 下首次并发初始化地址池会 native 崩溃（实测 2 线程即 SIGTRAP）。在并发拉取
@@ -198,7 +202,6 @@ def sector_constituents(members, quotes, sector_cn: str) -> list:
 
 def compose_summary(indices, sectors, as_of: Optional[str]):
     """合成 UsSummary：3 大指数 + 成分口径广度 + 领涨/领跌 Top3。"""
-    from datetime import datetime
     major = {i.symbol: i for i in indices}
     indices_3 = [major[s] for s in _MAJOR_INDEX_SYMBOLS if s in major]
     advancers = sum(s.advancers for s in sectors)
@@ -206,7 +209,7 @@ def compose_summary(indices, sectors, as_of: Optional[str]):
     unchanged = sum(s.constituent_count for s in sectors) - advancers - decliners
     return UsSummary(
         as_of=as_of or "",
-        updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        updated_at=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S"),
         indices=indices_3,
         advancers=advancers,
         decliners=decliners,

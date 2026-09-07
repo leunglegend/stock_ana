@@ -27,7 +27,7 @@ def get_us_summary():
     summary.breadth_scope = BREADTH_SCOPE
     # updated_at 用快照的全量刷新时刻（而非本次请求的 now()），缓存命中多小时后不漂移。
     # snap.updated_at 为 unix epoch，需转成与 compose_summary 同一「北京时间」字符串口径。
-    summary.updated_at = datetime.fromtimestamp(snap.updated_at).strftime("%Y-%m-%d %H:%M:%S")
+    summary.updated_at = datetime.fromtimestamp(snap.updated_at, us_data.BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
     # 领涨/领跌只保留实际涨/跌的板块（板块数不足 3 时 compose 的 Top3 切片会混入对手方）
     summary.top_gainers = [s for s in summary.top_gainers if s.change_pct > 0]
     summary.top_losers = [s for s in summary.top_losers if s.change_pct < 0]
